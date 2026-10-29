@@ -5,7 +5,7 @@ namespace Tests\Unit\Services;
 use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Services\ServerService;
-use Tests\TestCase;
+use PHPUnit\Framework\TestCase;
 
 class EgressProxyConfigTest extends TestCase
 {

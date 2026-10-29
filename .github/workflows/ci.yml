@@ -48,4 +48,4 @@ jobs:
         run: node --check public/assets/egress-admin.js
 
       - name: Run egress configuration test
-        run: vendor/bin/phpunit --filter EgressProxyConfigTest
+        run: vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php
