@@ -7,16 +7,43 @@ use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Services\NodeSyncService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class EgressProxyController extends Controller
 {
-    public function fetch()
+    public function fetch(Request $request)
     {
-        return $this->success(EgressProxy::query()
+        $params = $request->validate([
+            'page' => 'nullable|integer|min:1',
+            'page_size' => 'nullable|integer|between:1,100',
+            'search' => 'nullable|string|max:128',
+        ]);
+        $pageSize = (int) ($params['page_size'] ?? 20);
+        $search = trim((string) ($params['search'] ?? ''));
+
+        $paginator = EgressProxy::query()
             ->withCount('servers')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('name', 'like', "%{$search}%")
+                        ->orWhere('host', 'like', "%{$search}%")
+                        ->orWhere('protocol', 'like', "%{$search}%");
+                });
+            })
             ->orderByDesc('id')
-            ->get()
-            ->map(fn (EgressProxy $proxy) => $this->publicProxy($proxy)));
+            ->paginate($pageSize);
+
+        return $this->success([
+            'items' => collect($paginator->items())
+                ->map(fn (EgressProxy $proxy) => $this->publicProxy($proxy))
+                ->values(),
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
     }
 
     public function save(Request $request)
@@ -33,11 +60,62 @@ class EgressProxyController extends Controller
             'tls_server_name' => 'nullable|string|max:255',
             'allow_insecure' => 'nullable|boolean',
             'config' => 'nullable|array',
+            'config.method' => 'nullable|string|max:128',
+            'config.uuid' => 'nullable|string|max:128',
+            'config.flow' => 'nullable|string|max:128',
+            'config.network' => 'nullable|string|max:32',
+            'config.reality' => 'nullable|array',
+            'config.reality.public_key' => 'nullable|string|max:255',
+            'config.reality.short_id' => 'nullable|string|max:64',
             'enabled' => 'nullable|boolean',
+            'clear_username' => 'nullable|boolean',
+            'clear_password' => 'nullable|boolean',
         ]);
 
         $proxy = isset($params['id']) ? EgressProxy::findOrFail($params['id']) : new EgressProxy();
         unset($params['id']);
+
+        $clearUsername = (bool) ($params['clear_username'] ?? false);
+        $clearPassword = (bool) ($params['clear_password'] ?? false);
+        unset($params['clear_username'], $params['clear_password']);
+        if ($clearUsername) {
+            $params['username'] = null;
+        }
+        if ($clearPassword) {
+            $params['password'] = null;
+        }
+
+        $config = $params['config'] ?? $proxy->config ?? [];
+        $effectivePassword = array_key_exists('password', $params)
+            ? $params['password']
+            : $proxy->password;
+        $errors = [];
+        if ($params['protocol'] === 'shadowsocks') {
+            if (trim((string) ($config['method'] ?? '')) === '') {
+                $errors['config.method'] = ['Shadowsocks 出站必须填写 config.method。'];
+            }
+            if (trim((string) $effectivePassword) === '') {
+                $errors['password'] = ['Shadowsocks 出站必须填写密码。'];
+            }
+        }
+        if ($params['protocol'] === 'vless' && trim((string) ($config['uuid'] ?? '')) === '') {
+            $errors['config.uuid'] = ['VLESS 出站必须填写 config.uuid。'];
+        }
+        if ($params['protocol'] === 'trojan' && trim((string) $effectivePassword) === '') {
+            $errors['password'] = ['Trojan 出站必须填写密码。'];
+        }
+        if (isset($config['reality'])) {
+            if (trim((string) ($config['reality']['public_key'] ?? '')) === '') {
+                $errors['config.reality.public_key'] = ['Reality 出站必须填写 public_key。'];
+            }
+            if (trim((string) ($config['reality']['short_id'] ?? '')) === '') {
+                $errors['config.reality.short_id'] = ['Reality 出站必须填写 short_id。'];
+            }
+        }
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
+
         $proxy->fill($params);
         $proxy->save();
 
@@ -101,3 +179,4 @@ class EgressProxyController extends Controller
         );
     }
 }
+
