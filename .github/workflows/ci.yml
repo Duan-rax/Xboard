@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master, new-dev]
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: PHP and Laravel checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, curl, dom, fileinfo, gd, intl, pdo_mysql, pdo_sqlite, redis, zip
+          coverage: none
+
+      - name: Validate Composer files
+        # The upstream lockfile currently predates composer.json. Keep schema
+        # validation, while composer install below remains the dependency check.
+        run: composer validate --no-check-publish --no-check-lock
+
+      - name: Restore Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Check changed PHP syntax
+        run: |
+          php -l app/Http/Controllers/V2/Admin/Server/EgressProxyController.php
+          php -l app/Models/EgressProxy.php
+          php -l database/migrations/2026_10_29_000001_create_egress_proxy_table.php
+          php -l app/Services/ServerService.php
+
+      - name: Check JavaScript syntax
+        run: node --check public/assets/egress-admin.js
+
+      - name: Run egress configuration test
+        run: vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php

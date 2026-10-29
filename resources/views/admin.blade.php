@@ -81,6 +81,7 @@
 
 <body>
   <div id="root"></div>
+  <script src="/assets/egress-admin.js" defer></script>
 </body>
 
 </html>
