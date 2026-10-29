@@ -34,6 +34,7 @@ let mainInserted = false;
 let bindInserted = false;
 let clickHandler = null;
 let documentClickHandler = null;
+let mutationCallback = null;
 
 const mainModal = createElement();
 mainModal.remove = () => { mainInserted = false; };
@@ -71,6 +72,7 @@ clonedAnchor.addEventListener = (name, listener) => {
 
 const clonedItem = createElement({
   matches: () => false,
+  contains: element => element === clonedAnchor,
   querySelectorAll(selector) {
     if (selector === 'a[href]') return [clonedAnchor];
     if (selector === '[data-state]') return [];
@@ -165,7 +167,10 @@ global.document = {
     if (name === 'click') documentClickHandler = listener;
   },
 };
-global.MutationObserver = class { observe() {} };
+global.MutationObserver = class {
+  constructor(callback) { mutationCallback = callback; }
+  observe() {}
+};
 global.setTimeout = (callback) => { callback(); return 1; };
 
 require('../../public/assets/egress-admin.js');
@@ -193,6 +198,12 @@ assert.match(clonedAnchor.className, /bg-secondary/);
 assert.equal(routeAnchor['aria-current'], undefined);
 assert.equal(routeContent.style.display, 'none');
   assert.match(list.innerHTML, /没有匹配的出站配置/);
+
+  routeAnchor['aria-current'] = 'page';
+  routeAnchor.className = 'menu-link bg-secondary';
+  mutationCallback();
+  assert.equal(routeAnchor['aria-current'], undefined);
+  assert.equal(clonedAnchor['aria-current'], 'page');
 
   documentClickHandler({
     target: {

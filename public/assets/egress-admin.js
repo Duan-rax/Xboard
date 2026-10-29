@@ -347,6 +347,7 @@
         state.menuLink.className = current.className;
         current.classList.remove('bg-secondary');
         current.removeAttribute('aria-current');
+        current.blur?.();
       }
       state.menuLink.setAttribute('aria-current', 'page');
       return;
@@ -964,7 +965,17 @@
 
   const installMenu = () => {
     ensureStyle();
-    if (document.getElementById(MENU_ID)) return;
+    const existing = document.getElementById(MENU_ID);
+    if (existing) {
+      if (!state.menuLink || !existing.contains(state.menuLink)) {
+        state.menuLink = existing.querySelector('a[href]');
+        state.menuLinkBaseClass = state.menuLink?.className || '';
+      }
+      if (mainModal()?.classList.contains('open')) {
+        setMenuActive(true);
+      }
+      return;
+    }
 
     // Select the actual leaf link, never the top-level "节点管理" group button.
     // The route link is preferred so the new item appears after "路由管理".
