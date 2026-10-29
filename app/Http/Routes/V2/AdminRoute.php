@@ -89,6 +89,7 @@ class AdminRoute
                 $router->post('/save', [EgressProxyController::class, 'save']);
                 $router->post('/drop', [EgressProxyController::class, 'drop']);
                 $router->post('/bind', [EgressProxyController::class, 'bind']);
+                $router->post('/bind-status', [EgressProxyController::class, 'bindStatus']);
                 $router->post('/unbind-all', [EgressProxyController::class, 'unbindAll']);
                 $router->post('/test', [EgressProxyController::class, 'test']);
             });

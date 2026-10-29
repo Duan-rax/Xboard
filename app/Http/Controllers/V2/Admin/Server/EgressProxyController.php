@@ -288,7 +288,28 @@ class EgressProxyController extends Controller
             'changed' => $changedIds->count(),
             'server_ids' => $ids,
             'egress_proxy_id' => $egressProxyId ?: null,
+            'requested_at' => $requestedAt,
             'sync' => $this->waitForNodeSync($changedIds, $egressProxyId, $requestedAt),
+        ]);
+    }
+
+    /** Return current application status for a previous bind/unbind request. */
+    public function bindStatus(Request $request)
+    {
+        $params = $request->validate([
+            'server_ids' => 'required|array|max:500',
+            'server_ids.*' => 'integer|min:1|distinct',
+            'egress_proxy_id' => 'required|integer|min:0',
+            'requested_at' => 'required|integer|min:1',
+        ]);
+
+        return $this->success([
+            'sync' => $this->waitForNodeSync(
+                $params['server_ids'],
+                (int) $params['egress_proxy_id'],
+                (int) $params['requested_at'],
+                0
+            ),
         ]);
     }
 
@@ -315,6 +336,9 @@ class EgressProxyController extends Controller
 
         return $this->success([
             'changed' => $changedIds->count(),
+            'server_ids' => $changedIds,
+            'egress_proxy_id' => null,
+            'requested_at' => $requestedAt,
             'sync' => $this->waitForNodeSync($changedIds, 0, $requestedAt),
         ]);
     }
@@ -391,10 +415,15 @@ class EgressProxyController extends Controller
         }
     }
 
-    private function waitForNodeSync(iterable $serverIds, int $egressProxyId, int $requestedAt): array
+    private function waitForNodeSync(
+        iterable $serverIds,
+        int $egressProxyId,
+        int $requestedAt,
+        float $timeout = 3.0
+    ): array
     {
         $pending = collect($serverIds)->map(fn ($id) => (int) $id)->unique()->values();
-        $deadline = microtime(true) + 3.0;
+        $deadline = microtime(true) + max(0, $timeout);
 
         do {
             $pending = $pending->reject(function (int $serverId) use ($egressProxyId, $requestedAt) {
@@ -404,6 +433,9 @@ class EgressProxyController extends Controller
                     && (int) ($applied['applied_at'] ?? 0) >= $requestedAt;
             })->values();
             if ($pending->isEmpty()) {
+                break;
+            }
+            if ($timeout <= 0) {
                 break;
             }
             usleep(100_000);

@@ -43,6 +43,7 @@
     menuLink: null,
     menuLinkBaseClass: '',
     activeMenuSnapshot: null,
+    syncPoll: 0,
     busy: false,
   };
 
@@ -670,11 +671,38 @@
   };
 
   const closeBind = () => {
+    state.syncPoll++;
     bindModal()?.classList.remove('open');
     bindModal()?.setAttribute('aria-hidden', 'true');
     mainModal()?.classList.remove('xe-binding');
     state.selected.clear();
     state.bindProxy = null;
+  };
+
+  const pollNodeSync = async (serverIds, proxyId, requestedAt) => {
+    const token = ++state.syncPoll;
+    for (let attempt = 1; attempt <= 12; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      if (token !== state.syncPoll || !state.bindProxy) return;
+      try {
+        const result = await api('/bind-status', 'POST', {
+          server_ids: serverIds,
+          egress_proxy_id: proxyId,
+          requested_at: requestedAt,
+        });
+        const pending = result?.sync?.pending_server_ids?.length || 0;
+        if (pending === 0) {
+          showBindMessage('节点配置已全部确认重载。');
+          return;
+        }
+        showBindMessage(`正在等待 ${pending} 个节点应用新配置…`);
+      } catch (error) {
+        if (attempt === 12) showBindMessage(error.message, true);
+      }
+    }
+    if (token === state.syncPoll && state.bindProxy) {
+      showBindMessage('仍有节点等待配置同步，请稍后刷新节点状态。');
+    }
   };
 
   const applySelection = async (proxyId) => {
@@ -708,6 +736,9 @@
         : '，节点均已确认重载。';
       showBindMessage(`${action}完成，实际更新 ${changed} 个节点${syncMessage}`);
       await Promise.all([loadBindNodes(), renderList()]);
+      if (pending > 0 && result?.requested_at) {
+        void pollNodeSync(result.server_ids || ids, proxyId, result.requested_at);
+      }
     } catch (error) {
       showBindMessage(error.message, true);
     }
@@ -728,6 +759,9 @@
           ? '当前没有需要解绑的节点。'
           : `已解绑 ${changed} 个节点。${pending ? `${pending} 个节点仍待确认重载。` : '节点均已确认重载。'}`
       );
+      if (pending > 0 && result?.requested_at) {
+        void pollNodeSync(result.server_ids || [], 0, result.requested_at);
+      }
       state.selected.clear();
       await Promise.all([loadBindNodes(), renderList()]);
     } catch (error) {
