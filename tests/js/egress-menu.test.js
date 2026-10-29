@@ -88,6 +88,7 @@ const routeAnchor = createElement({
     return null;
   },
 });
+routeAnchor.classList.add('bg-secondary');
 
 const routeItem = createElement({
   textContent: '路由管理',
@@ -150,6 +151,10 @@ global.document = {
   },
   querySelectorAll(selector) {
     if (selector === 'a[href]') return [routeAnchor];
+    if (selector === 'nav a[href]') return [routeAnchor];
+    if (selector === '.xe-menu-suppressed') {
+      return routeAnchor.classList.contains('xe-menu-suppressed') ? [routeAnchor] : [];
+    }
     if (selector === 'a,button') return [topGroup, routeAnchor];
     if (selector === 'main') return [contentHost];
     return [];
@@ -182,6 +187,8 @@ async function verifyModalOpen() {
   assert.equal(bindInserted, true, 'the page must include the embedded binding view');
   assert.equal(mainModal.classList.contains('open'), true);
   assert.equal(clonedAnchor['data-xe-active'], 'true');
+  assert.equal(routeAnchor.classList.contains('xe-menu-suppressed'), true);
+  assert.equal(routeAnchor.classList.contains('bg-secondary'), true);
 assert.equal(routeContent.style.display, 'none');
   assert.match(list.innerHTML, /没有匹配的出站配置/);
 
@@ -193,6 +200,8 @@ assert.equal(routeContent.style.display, 'none');
     },
   });
   assert.equal(clonedAnchor['data-xe-active'], 'false');
+  assert.equal(routeAnchor.classList.contains('xe-menu-suppressed'), false);
+  assert.equal(routeAnchor.classList.contains('bg-secondary'), true);
 
   console.log('egress menu, embedded page, and catalog test passed');
 }

@@ -205,6 +205,7 @@
     #${BIND_MODAL_ID} .xe-foot .xe-small{margin-right:auto}
     #${MODAL_ID} .xe-hint{color:#64748b;font-size:11px;line-height:1.55;margin-top:4px}
     #${MENU_ID} a[data-xe-active="true"]{background:hsl(var(--accent,210 40% 96.1%));color:hsl(var(--accent-foreground,222.2 47.4% 11.2%))}
+    a.xe-menu-suppressed{background:transparent!important;box-shadow:none!important;color:inherit!important;outline:none!important}
     @media(max-width:900px){#${MODAL_ID} > .xe-page-shell > .xe-main{grid-template-columns:1fr}#${MODAL_ID} .xe-page-shell{padding:22px 16px 32px}}
   `;
 
@@ -334,6 +335,18 @@
   const bindModal = () => document.getElementById(BIND_MODAL_ID);
   const setMenuActive = (active) => {
     state.menuLink?.setAttribute('data-xe-active', active ? 'true' : 'false');
+  };
+  const suppressOtherMenuLinks = () => {
+    document.querySelectorAll('nav a[href]').forEach((link) => {
+      if (link !== state.menuLink && !link.closest(`#${MENU_ID}`)) {
+        link.classList.add('xe-menu-suppressed');
+      }
+    });
+  };
+  const clearSuppressedMenuLinks = () => {
+    document.querySelectorAll('.xe-menu-suppressed').forEach((link) => {
+      link.classList.remove('xe-menu-suppressed');
+    });
   };
 
   const showMessage = (message, error = false) => {
@@ -903,6 +916,7 @@
 
   const closeMainPage = () => {
     setMenuActive(false);
+    clearSuppressedMenuLinks();
     const page = mainModal();
     if (!page) return;
     closeBind();
@@ -929,6 +943,7 @@
     page.classList.add('open');
     page.setAttribute('aria-hidden', 'false');
     setMenuActive(true);
+    suppressOtherMenuLinks();
     await renderList();
   };
 
@@ -958,6 +973,10 @@
     menuLink.removeAttribute('aria-current');
     menuLink.setAttribute('data-xe-active', 'false');
     state.menuLink = menuLink;
+    if (mainModal()?.classList.contains('open')) {
+      setMenuActive(true);
+      suppressOtherMenuLinks();
+    }
     item.removeAttribute('data-state');
     item.querySelectorAll('[data-state]').forEach((element) => {
       element.removeAttribute('data-state');
