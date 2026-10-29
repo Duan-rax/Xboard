@@ -41,6 +41,8 @@
     pageHost: null,
     hiddenHostChildren: [],
     menuLink: null,
+    menuLinkBaseClass: '',
+    activeMenuSnapshot: null,
     busy: false,
   };
 
@@ -204,8 +206,6 @@
     #${BIND_MODAL_ID} .xe-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:14px;border-top:1px solid hsl(var(--border,214 32% 91%))}
     #${BIND_MODAL_ID} .xe-foot .xe-small{margin-right:auto}
     #${MODAL_ID} .xe-hint{color:#64748b;font-size:11px;line-height:1.55;margin-top:4px}
-    #${MENU_ID} a[data-xe-active="true"]{background:hsl(var(--accent,210 40% 96.1%));color:hsl(var(--accent-foreground,222.2 47.4% 11.2%))}
-    a.xe-menu-suppressed{background:transparent!important;box-shadow:none!important;color:inherit!important;outline:none!important}
     @media(max-width:900px){#${MODAL_ID} > .xe-page-shell > .xe-main{grid-template-columns:1fr}#${MODAL_ID} .xe-page-shell{padding:22px 16px 32px}}
   `;
 
@@ -334,19 +334,36 @@
   const mainModal = () => document.getElementById(MODAL_ID);
   const bindModal = () => document.getElementById(BIND_MODAL_ID);
   const setMenuActive = (active) => {
-    state.menuLink?.setAttribute('data-xe-active', active ? 'true' : 'false');
-  };
-  const suppressOtherMenuLinks = () => {
-    document.querySelectorAll('nav a[href]').forEach((link) => {
-      if (link !== state.menuLink && !link.closest(`#${MENU_ID}`)) {
-        link.classList.add('xe-menu-suppressed');
+    if (!state.menuLink) return;
+    if (active) {
+      const current = [...document.querySelectorAll('nav a[href]')]
+        .find((link) => link !== state.menuLink && link.getAttribute('aria-current') === 'page');
+      if (current) {
+        state.activeMenuSnapshot = {
+          link: current,
+          className: current.className,
+          ariaCurrent: current.getAttribute('aria-current'),
+        };
+        state.menuLink.className = current.className;
+        current.classList.remove('bg-secondary');
+        current.removeAttribute('aria-current');
       }
-    });
-  };
-  const clearSuppressedMenuLinks = () => {
-    document.querySelectorAll('.xe-menu-suppressed').forEach((link) => {
-      link.classList.remove('xe-menu-suppressed');
-    });
+      state.menuLink.setAttribute('aria-current', 'page');
+      return;
+    }
+
+    state.menuLink.className = state.menuLinkBaseClass;
+    state.menuLink.removeAttribute('aria-current');
+    if (state.activeMenuSnapshot?.link) {
+      state.activeMenuSnapshot.link.className = state.activeMenuSnapshot.className;
+      if (state.activeMenuSnapshot.ariaCurrent) {
+        state.activeMenuSnapshot.link.setAttribute(
+          'aria-current',
+          state.activeMenuSnapshot.ariaCurrent
+        );
+      }
+    }
+    state.activeMenuSnapshot = null;
   };
 
   const showMessage = (message, error = false) => {
@@ -916,7 +933,6 @@
 
   const closeMainPage = () => {
     setMenuActive(false);
-    clearSuppressedMenuLinks();
     const page = mainModal();
     if (!page) return;
     closeBind();
@@ -943,7 +959,6 @@
     page.classList.add('open');
     page.setAttribute('aria-hidden', 'false');
     setMenuActive(true);
-    suppressOtherMenuLinks();
     await renderList();
   };
 
@@ -971,11 +986,11 @@
     if (!menuLink) return;
     menuLink.setAttribute('href', '#');
     menuLink.removeAttribute('aria-current');
-    menuLink.setAttribute('data-xe-active', 'false');
     state.menuLink = menuLink;
+    state.menuLinkBaseClass = menuLink.className;
+    state.activeMenuSnapshot = null;
     if (mainModal()?.classList.contains('open')) {
       setMenuActive(true);
-      suppressOtherMenuLinks();
     }
     item.removeAttribute('data-state');
     item.querySelectorAll('[data-state]').forEach((element) => {

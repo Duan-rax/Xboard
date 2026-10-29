@@ -56,6 +56,7 @@ const clonedIconHost = { innerHTML: '', textContent: '' };
 const clonedLabel = { nodeType: 3, nodeValue: '路由管理' };
 const clonedAnchor = createElement({
   textContent: '路由管理',
+  className: 'menu-link',
   childNodes: [{ nodeType: 1, textContent: '' }, clonedLabel],
   matches: selector => selector === 'a',
   querySelectorAll(selector) {
@@ -80,6 +81,8 @@ const clonedItem = createElement({
 const routeAnchor = createElement({
   textContent: '路由管理',
   href: '/server/route',
+  className: 'menu-link bg-secondary',
+  'aria-current': 'page',
   getAttribute(name) {
     return name === 'href' ? this.href : this[name];
   },
@@ -88,7 +91,6 @@ const routeAnchor = createElement({
     return null;
   },
 });
-routeAnchor.classList.add('bg-secondary');
 
 const routeItem = createElement({
   textContent: '路由管理',
@@ -186,9 +188,9 @@ async function verifyModalOpen() {
   assert.equal(mainInserted, true, 'clicking the menu must insert the embedded page');
   assert.equal(bindInserted, true, 'the page must include the embedded binding view');
   assert.equal(mainModal.classList.contains('open'), true);
-  assert.equal(clonedAnchor['data-xe-active'], 'true');
-  assert.equal(routeAnchor.classList.contains('xe-menu-suppressed'), true);
-  assert.equal(routeAnchor.classList.contains('bg-secondary'), true);
+assert.equal(clonedAnchor['aria-current'], 'page');
+assert.match(clonedAnchor.className, /bg-secondary/);
+assert.equal(routeAnchor['aria-current'], undefined);
 assert.equal(routeContent.style.display, 'none');
   assert.match(list.innerHTML, /没有匹配的出站配置/);
 
@@ -199,9 +201,9 @@ assert.equal(routeContent.style.display, 'none');
       },
     },
   });
-  assert.equal(clonedAnchor['data-xe-active'], 'false');
-  assert.equal(routeAnchor.classList.contains('xe-menu-suppressed'), false);
-  assert.equal(routeAnchor.classList.contains('bg-secondary'), true);
+  assert.equal(clonedAnchor['aria-current'], undefined);
+  assert.equal(routeAnchor['aria-current'], 'page');
+  assert.match(routeAnchor.className, /bg-secondary/);
 
   console.log('egress menu, embedded page, and catalog test passed');
 }
