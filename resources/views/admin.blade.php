@@ -81,7 +81,7 @@
 
 <body>
   <div id="root"></div>
-  <script src="/assets/egress-admin.js" defer></script>
+  <script src="/assets/egress-admin.js?v={{ urlencode($version) }}" defer></script>
 </body>
 
 </html>
