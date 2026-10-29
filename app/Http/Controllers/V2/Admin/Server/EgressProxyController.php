@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Services\EgressProxyValidator;
 use App\Services\NodeSyncService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\Process\Process;
@@ -280,12 +281,14 @@ class EgressProxyController extends Controller
                     ->update(['egress_proxy_id' => $egressProxyId ?: null]);
             }
         });
+        $requestedAt = time();
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
             'changed' => $changedIds->count(),
             'server_ids' => $ids,
             'egress_proxy_id' => $egressProxyId ?: null,
+            'sync' => $this->waitForNodeSync($changedIds, $egressProxyId, $requestedAt),
         ]);
     }
 
@@ -307,9 +310,13 @@ class EgressProxyController extends Controller
                     ->update(['egress_proxy_id' => null]);
             }
         });
+        $requestedAt = time();
         $this->notifyNodeConfigs($changedIds);
 
-        return $this->success(['changed' => $changedIds->count()]);
+        return $this->success([
+            'changed' => $changedIds->count(),
+            'sync' => $this->waitForNodeSync($changedIds, 0, $requestedAt),
+        ]);
     }
 
     /** Run a real proxy request through an isolated sing-box process. */
@@ -382,5 +389,31 @@ class EgressProxyController extends Controller
         foreach ($serverIds as $serverId) {
             NodeSyncService::notifyConfigUpdated((int) $serverId);
         }
+    }
+
+    private function waitForNodeSync(iterable $serverIds, int $egressProxyId, int $requestedAt): array
+    {
+        $pending = collect($serverIds)->map(fn ($id) => (int) $id)->unique()->values();
+        $deadline = microtime(true) + 3.0;
+
+        do {
+            $pending = $pending->reject(function (int $serverId) use ($egressProxyId, $requestedAt) {
+                $applied = Cache::get("node_config_applied:{$serverId}");
+                return is_array($applied)
+                    && (int) ($applied['egress_proxy_id'] ?? -1) === $egressProxyId
+                    && (int) ($applied['applied_at'] ?? 0) >= $requestedAt;
+            })->values();
+            if ($pending->isEmpty()) {
+                break;
+            }
+            usleep(100_000);
+        } while (microtime(true) < $deadline);
+
+        $confirmed = collect($serverIds)->map(fn ($id) => (int) $id)->unique()
+            ->diff($pending)->values();
+        return [
+            'confirmed_server_ids' => $confirmed,
+            'pending_server_ids' => $pending,
+        ];
     }
 }

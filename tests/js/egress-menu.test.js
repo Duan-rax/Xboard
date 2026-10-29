@@ -33,8 +33,10 @@ let style = null;
 let mainInserted = false;
 let bindInserted = false;
 let clickHandler = null;
+let documentClickHandler = null;
 
 const mainModal = createElement();
+mainModal.remove = () => { mainInserted = false; };
 const bindModal = createElement();
 const list = createElement();
 const pager = createElement();
@@ -82,8 +84,8 @@ const routeAnchor = createElement({
     return name === 'href' ? this.href : this[name];
   },
   closest(selector) {
-    assert.equal(selector, 'li');
-    return routeItem;
+    if (selector === 'li') return routeItem;
+    return null;
   },
 });
 
@@ -152,7 +154,9 @@ global.document = {
     if (selector === 'main') return [contentHost];
     return [];
   },
-  addEventListener() {},
+  addEventListener(name, listener) {
+    if (name === 'click') documentClickHandler = listener;
+  },
 };
 global.MutationObserver = class { observe() {} };
 global.setTimeout = (callback) => { callback(); return 1; };
@@ -180,6 +184,15 @@ async function verifyModalOpen() {
   assert.equal(clonedAnchor['data-xe-active'], 'true');
 assert.equal(routeContent.style.display, 'none');
   assert.match(list.innerHTML, /没有匹配的出站配置/);
+
+  documentClickHandler({
+    target: {
+      closest(selector) {
+        return selector === 'a[href]' ? routeAnchor : null;
+      },
+    },
+  });
+  assert.equal(clonedAnchor['data-xe-active'], 'false');
 
   console.log('egress menu, embedded page, and catalog test passed');
 }

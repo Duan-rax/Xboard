@@ -31,6 +31,13 @@ class NodeEventHandlers
 
         $nodeType = strtoupper($node->type);
         Cache::put(\App\Utils\CacheKey::get('SERVER_' . $nodeType . '_LAST_CHECK_AT', $nodeId), time(), 3600);
+        if (array_key_exists('egress_proxy_id', $data)) {
+            Cache::put("node_config_applied:{$nodeId}", [
+                'egress_proxy_id' => (int) $data['egress_proxy_id'],
+                'config_hash' => (string) ($data['config_hash'] ?? ''),
+                'applied_at' => (int) ($data['config_applied_at'] ?? time()),
+            ], 86400);
+        }
         ServerService::updateMetrics($node, $data);
 
         Log::debug("[WS] Node#{$nodeId} status updated");

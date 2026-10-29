@@ -664,7 +664,12 @@
         egress_proxy_id: proxyId,
       });
       state.selected.clear();
-      showBindMessage(`${action}完成，实际更新 ${result?.changed ?? ids.length} 个节点。`);
+      const confirmed = result?.sync?.confirmed_server_ids?.length || 0;
+      const pending = result?.sync?.pending_server_ids?.length || 0;
+      const syncMessage = pending
+        ? `，${confirmed} 个节点已重载，${pending} 个节点仍在等待配置同步。`
+        : '，节点均已确认重载。';
+      showBindMessage(`${action}完成，实际更新 ${result?.changed ?? ids.length} 个节点${syncMessage}`);
       await Promise.all([loadBindNodes(), renderList()]);
     } catch (error) {
       showBindMessage(error.message, true);
@@ -679,7 +684,10 @@
       const result = await api('/unbind-all', 'POST', {
         egress_proxy_id: Number(state.bindProxy.id),
       });
-      showBindMessage(`已解绑 ${result?.changed ?? 0} 个节点。`);
+      const pending = result?.sync?.pending_server_ids?.length || 0;
+      showBindMessage(
+        `已解绑 ${result?.changed ?? 0} 个节点。${pending ? `${pending} 个节点仍待确认重载。` : '节点均已确认重载。'}`
+      );
       state.selected.clear();
       await Promise.all([loadBindNodes(), renderList()]);
     } catch (error) {
@@ -885,10 +893,10 @@
   };
 
   const closeMainPage = () => {
+    setMenuActive(false);
     const page = mainModal();
     if (!page) return;
     closeBind();
-    setMenuActive(false);
     page.classList.remove('open');
     page.setAttribute('aria-hidden', 'true');
     state.hiddenHostChildren.forEach(({ element, display }) => {
