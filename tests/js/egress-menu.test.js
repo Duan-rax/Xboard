@@ -150,6 +150,8 @@ assert.equal(clonedAnchor.href, '#');
 assert.equal(clonedLabel.nodeValue, '出站管理');
 assert.equal(clonedIcon.textContent, '', 'the cloned icon must be preserved');
 assert.equal(typeof clickHandler, 'function');
+assert.match(style.textContent, /background:hsl\(var\(--card,0 0% 100%\)\)/);
+assert.doesNotMatch(style.textContent, /background:var\(--background/);
 
 async function verifyModalOpen() {
   clickHandler({ preventDefault() {} });

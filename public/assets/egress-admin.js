@@ -146,7 +146,7 @@
     #${MODAL_ID},#${BIND_MODAL_ID}{position:fixed;inset:0;z-index:9999;display:none;background:rgba(15,23,42,.52);align-items:center;justify-content:center;padding:16px;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
     #${BIND_MODAL_ID}{z-index:10000}
     #${MODAL_ID}.open,#${BIND_MODAL_ID}.open{display:flex}
-    #${MODAL_ID} .xe-card,#${BIND_MODAL_ID} .xe-card{width:min(1180px,96vw);max-height:92vh;overflow:auto;background:var(--background,#fff);border:1px solid hsl(var(--border,214 32% 91%));border-radius:16px;box-shadow:0 25px 70px rgba(2,6,23,.35);color:var(--foreground,#0f172a)}
+    #${MODAL_ID} .xe-card,#${BIND_MODAL_ID} .xe-card{width:min(1180px,96vw);max-height:92vh;overflow:auto;background:hsl(var(--card,0 0% 100%));border:1px solid hsl(var(--border,214 32% 91%));border-radius:16px;box-shadow:0 25px 70px rgba(2,6,23,.35);color:hsl(var(--card-foreground,222.2 84% 4.9%))}
     #${BIND_MODAL_ID} .xe-card{width:min(860px,96vw)}
     #${MODAL_ID} .xe-head,#${BIND_MODAL_ID} .xe-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 24px;border-bottom:1px solid hsl(var(--border,214 32% 91%))}
     #${MODAL_ID} h2,#${BIND_MODAL_ID} h2{margin:0;font-size:19px;line-height:1.3}
