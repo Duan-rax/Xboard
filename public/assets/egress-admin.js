@@ -749,7 +749,7 @@
     const test = event.target.closest('[data-xe-test]');
     if (test) {
       test.disabled = true;
-      showMessage('正在检查出站端口可达性…');
+      showMessage('正在通过真实代理请求测试目标…');
       try {
         const result = await api('/test', 'POST', { id: Number(test.dataset.xeTest) });
         showMessage(result?.message || (result?.ok ? '端口可达。' : '无法连接。'), !result?.ok);

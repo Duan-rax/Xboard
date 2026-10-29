@@ -1,3 +1,15 @@
+FROM golang:1.26-alpine AS egress-probe
+
+ARG TARGETARCH
+WORKDIR /src
+COPY tools/egress-probe/go.mod tools/egress-probe/go.sum ./
+RUN go mod download
+COPY tools/egress-probe/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" \
+    -tags "with_quic with_utls with_wireguard with_acme with_clash_api" \
+    -o /out/xboard-egress-probe .
+
 FROM phpswoole/swoole:php8.2-alpine AS runtime
 
 RUN php -r 'if (version_compare(PHP_VERSION, "8.2.35", "<")) { \
@@ -15,6 +27,7 @@ RUN IPE_PROCESSOR_COUNT=2 install-php-extensions zip
 
 # Keep Redis independent of Alpine's package version to preserve RDB 14 compatibility.
 COPY --from=redis:8-alpine /usr/local/bin/redis-* /usr/local/bin/
+COPY --from=egress-probe /out/xboard-egress-probe /usr/local/bin/xboard-egress-probe
 
 RUN apk --no-cache add \
         shadow \

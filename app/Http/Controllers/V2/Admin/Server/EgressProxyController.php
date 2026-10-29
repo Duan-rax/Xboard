@@ -10,6 +10,7 @@ use App\Services\NodeSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Process\Process;
 
 class EgressProxyController extends Controller
 {
@@ -311,45 +312,42 @@ class EgressProxyController extends Controller
         return $this->success(['changed' => $changedIds->count()]);
     }
 
-    /**
-     * Best-effort TCP reachability check from the panel host. Passing this
-     * test only proves that the endpoint accepts TCP; proxy authentication and
-     * the node-to-landing path still need a real node reload.
-     */
+    /** Run a real proxy request through an isolated sing-box process. */
     public function test(Request $request)
     {
         $id = $request->validate(['id' => 'required|integer'])['id'];
         $proxy = EgressProxy::findOrFail($id);
-        $host = trim((string) $proxy->host);
-        $port = (int) $proxy->port;
-        $address = str_contains($host, ':') ? "[{$host}]" : $host;
-
-        $startedAt = microtime(true);
-        $errno = 0;
-        $errstr = '';
-        $socket = @stream_socket_client(
-            "tcp://{$address}:{$port}",
-            $errno,
-            $errstr,
-            3.0,
-            STREAM_CLIENT_CONNECT
-        );
-        $latency = (int) round((microtime(true) - $startedAt) * 1000);
-
-        if ($socket === false) {
+        $binary = (string) (getenv('EGRESS_PROBE_BIN') ?: '/usr/local/bin/xboard-egress-probe');
+        if (!is_executable($binary)) {
             return $this->success([
                 'ok' => false,
-                'latency_ms' => $latency,
-                'message' => $errstr !== '' ? $errstr : "无法连接 {$host}:{$port}",
+                'latency_ms' => 0,
+                'message' => '真实代理测试组件未安装。',
             ]);
         }
-        fclose($socket);
-
-        return $this->success([
-            'ok' => true,
-            'latency_ms' => $latency,
-            'message' => "端口可达（{$latency} ms）",
-        ]);
+        try {
+            $process = new Process([$binary], base_path(), null, null, 15.0);
+            $process->setInput(json_encode($proxy->toNodeConfig(), JSON_THROW_ON_ERROR));
+            $process->run();
+            $payload = json_decode(trim($process->getOutput()), true);
+        } catch (\Throwable $exception) {
+            return $this->success([
+                'ok' => false,
+                'latency_ms' => 0,
+                'message' => '真实代理测试超时或启动失败: ' . mb_substr($exception->getMessage(), 0, 500),
+            ]);
+        }
+        if (!is_array($payload)) {
+            $message = trim($process->getErrorOutput());
+            return $this->success([
+                'ok' => false,
+                'latency_ms' => 0,
+                'message' => $message !== ''
+                    ? '真实代理测试失败: ' . mb_substr($message, 0, 500)
+                    : '真实代理测试未返回有效结果。',
+            ]);
+        }
+        return $this->success($payload);
     }
 
     private function publicProxy(EgressProxy $proxy): array
