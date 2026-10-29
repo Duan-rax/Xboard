@@ -79,7 +79,34 @@
   const open = async () => { let modal=document.getElementById(modalId); if(!modal){ document.body.insertAdjacentHTML('beforeend',modalHtml()); modal=document.getElementById(modalId); modal.addEventListener('click',async e=>{ if(e.target===modal||e.target.closest('[data-xe-close]')){modal.classList.remove('open');return;} if(e.target.closest('[data-xe-reset]')){resetForm();return;} if(e.target.closest('[data-xe-search]')){currentPage=1;await render();return;} const page=e.target.closest('[data-xe-page]');if(page&&!page.disabled){currentPage=Number(page.dataset.xePage);await render();return;} if(e.target.closest('[data-xe-save]')){try{const saved=await api('/save','POST',readForm());showMessage(`已保存 ${saved.name}`);await render();}catch(err){showMessage(err.message,true)}return;} const edit=e.target.closest('[data-xe-edit]');if(edit){fillForm((document.getElementById('xe-list')._proxies||[]).find(p=>p.id===Number(edit.dataset.xeEdit)));return;} const bind=e.target.closest('[data-xe-bind]');if(bind){try{const serverId=Number(document.querySelector(`[data-xe-bind-select="${bind.dataset.xeBind}"]`).value);if(!serverId)throw new Error('请选择要绑定的节点');await api('/bind','POST',{server_id:serverId,egress_proxy_id:Number(bind.dataset.xeBind)});showMessage('节点已绑定；支持 egress_proxy 的节点会在下次拉取或推送时重载配置。');await render();}catch(err){showMessage(err.message,true)}return;} const unbind=e.target.closest('[data-xe-unbind]');if(unbind){try{const serverId=Number(document.querySelector(`[data-xe-bind-select="${unbind.dataset.xeUnbind}"]`).value);if(!serverId)throw new Error('请选择要解绑的节点');await api('/bind','POST',{server_id:serverId,egress_proxy_id:0});showMessage('节点已解绑，将恢复默认直连出站。');await render();}catch(err){showMessage(err.message,true)}return;} const remove=e.target.closest('[data-xe-delete]');if(remove&&confirm('删除此出站？已绑定节点不能删除。')){try{await api('/drop','POST',{id:Number(remove.dataset.xeDelete)});await render()}catch(err){showMessage(err.message,true)}} }); document.getElementById('xe-search').addEventListener('keydown',async e=>{if(e.key==='Enter'){currentPage=1;await render();}}); }
     modal.classList.add('open'); await render();
   };
-  const installMenu = () => { insertStyle(); if(document.getElementById(menuId)) return; const labels=new Set(['路由管理','Route Management','Routes']); const anchors=[...document.querySelectorAll('a,button')]; const route=anchors.find(el=>labels.has(el.textContent.trim())); if(!route) return; const item=route.cloneNode(true); item.id=menuId; item.href='#'; item.removeAttribute('data-state'); item.textContent='出站管理'; item.addEventListener('click',e=>{e.preventDefault();open();}); (route.parentElement||route).insertAdjacentElement('afterend',item); };
+  const installMenu = () => {
+    insertStyle();
+    if (document.getElementById(menuId)) return;
+
+    const labels = new Set(['路由管理', 'Route Management', 'Routes']);
+    const route = [...document.querySelectorAll('a,button')]
+      .find(el => labels.has(el.textContent.trim()));
+    if (!route) return;
+
+    // Clone the actual clickable menu entry and keep it inside the same submenu.
+    // Inserting after route.parentElement can put the link outside the whole
+    // submenu when the parent is the group's shared content container.
+    const item = route.cloneNode(true);
+    item.id = menuId;
+    if (item.matches('a')) item.setAttribute('href', '#');
+    item.removeAttribute('data-state');
+    item.querySelectorAll('[data-state]').forEach(el => el.removeAttribute('data-state'));
+
+    // Preserve the icon and the menu component's nested styling. Replacing the
+    // entry's textContent would remove every child span/SVG from the clone.
+    const textNode = [...item.querySelectorAll('*')]
+      .reverse()
+      .find(el => labels.has(el.textContent.trim())) || item;
+    textNode.textContent = '出站管理';
+
+    item.addEventListener('click', e => { e.preventDefault(); open(); });
+    route.insertAdjacentElement('afterend', item);
+  };
   new MutationObserver(installMenu).observe(document.documentElement,{childList:true,subtree:true});
   document.addEventListener('DOMContentLoaded',installMenu); setTimeout(installMenu,1000);
 })();

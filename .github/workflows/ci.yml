@@ -44,8 +44,10 @@ jobs:
           php -l database/migrations/2026_10_29_000001_create_egress_proxy_table.php
           php -l app/Services/ServerService.php
 
-      - name: Check JavaScript syntax
-        run: node --check public/assets/egress-admin.js
+      - name: Check JavaScript extension
+        run: |
+          node --check public/assets/egress-admin.js
+          node tests/js/egress-menu.test.js
 
       - name: Run egress configuration test
         run: vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php
