@@ -5,6 +5,7 @@ on:
     branches: [master, new-dev]
   push:
     branches: ['**']
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:

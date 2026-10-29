@@ -121,9 +121,9 @@ docker compose restart
 
 ## 📦 Releases
 
-Releases use date-based immutable tags such as `v2026.10.30`. Panel images are
-built natively on SGP after CI and compatibility checks pass; a GitHub Release
-records the source commit, deploy image and companion node version.
+Releases use date-based immutable tags such as `v2026.10.30`. A `v*` tag runs
+GitHub Actions to build the multi-architecture panel image, push it to GHCR,
+and create the GitHub Release. Branch pushes do not replace release images.
 
 2. For aaPanel installations, restart the Octane daemon process
 

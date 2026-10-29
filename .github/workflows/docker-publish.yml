@@ -1,8 +1,8 @@
 name: Docker Build and Publish
 
 on:
-  # Temporary: builds are performed natively on SGP. Keep manual dispatch
-  # available for producing the public multi-architecture fallback image.
+  push:
+    tags: ['v*']
   workflow_dispatch:
 
 env:
@@ -63,16 +63,21 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,format=short,prefix=,enable=true
+            type=raw,value=${{ steps.get_version.outputs.version }}
             type=raw,value=new,enable=${{ github.ref == 'refs/heads/master' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Update version in app.php
         run: |
-          VERSION=$(date '+%Y%m%d')-$(git rev-parse --short HEAD)
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(date '+%Y%m%d')-$(git rev-parse --short HEAD)
+          fi
           sed -i "s/'version' => '.*'/'version' => '$VERSION'/g" config/app.php
           echo "Updated version to: $VERSION"
 
@@ -98,4 +103,20 @@ jobs:
           outputs: type=registry,push=true
           allow: |
             network.host
+
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          make_latest: 'true'
 
