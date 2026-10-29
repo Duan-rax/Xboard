@@ -1,8 +1,8 @@
 name: Docker Build and Publish
 
 on:
-  push:
-    branches: ["master", "new-dev"]
+  # Temporary: builds are performed natively on SGP. Keep manual dispatch
+  # available for producing the public multi-architecture fallback image.
   workflow_dispatch:
 
 env:
