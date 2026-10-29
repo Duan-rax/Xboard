@@ -2,14 +2,16 @@
 
 Release dates use the `Asia/Singapore` timezone.
 
-## 2026.10.30.1
+## 2026.10.30.2
 
-Release: `v2026.10.30.1`
+Release: `v2026.10.30.2`
 
 - Switched official panel image builds and GitHub Releases to tag-triggered
   GitHub Actions.
 - Release tags now build amd64/arm64 images, publish GHCR tags and update
   `latest` automatically.
+- Go builders now run on the native `BUILDPLATFORM` and cross-compile for
+  `TARGETARCH`, avoiding stalled arm64 builds under QEMU.
 - Branch pushes remain verification-only and do not replace release images.
 
 ## 2026.10.30

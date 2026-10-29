@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine AS egress-probe
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS egress-probe
 
 ARG TARGETARCH
 WORKDIR /src
