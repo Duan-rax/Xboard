@@ -85,9 +85,12 @@ class AdminRoute
                 'prefix' => 'server/egress'
             ], function ($router) {
                 $router->get('/fetch', [EgressProxyController::class, 'fetch']);
+                $router->get('/nodes', [EgressProxyController::class, 'nodes']);
                 $router->post('/save', [EgressProxyController::class, 'save']);
                 $router->post('/drop', [EgressProxyController::class, 'drop']);
                 $router->post('/bind', [EgressProxyController::class, 'bind']);
+                $router->post('/unbind-all', [EgressProxyController::class, 'unbindAll']);
+                $router->post('/test', [EgressProxyController::class, 'test']);
             });
             // 节点管理接口
             $router->group([

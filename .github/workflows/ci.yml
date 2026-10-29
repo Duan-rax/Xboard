@@ -41,8 +41,10 @@ jobs:
         run: |
           php -l app/Http/Controllers/V2/Admin/Server/EgressProxyController.php
           php -l app/Models/EgressProxy.php
+          php -l app/Services/EgressProxyValidator.php
           php -l database/migrations/2026_10_29_000001_create_egress_proxy_table.php
           php -l app/Services/ServerService.php
+          php -l app/Http/Routes/V2/AdminRoute.php
 
       - name: Check JavaScript extension
         run: |
@@ -50,4 +52,6 @@ jobs:
           node tests/js/egress-menu.test.js
 
       - name: Run egress configuration test
-        run: vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php
+        run: |
+          vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php
+          vendor/bin/phpunit --filter EgressProxyValidatorTest tests/Unit/Services/EgressProxyValidatorTest.php
