@@ -167,6 +167,8 @@ assert.match(clonedIconHost.innerHTML, /xe-menu-icon/);
 assert.equal(typeof clickHandler, 'function');
 assert.match(style.textContent, /\.xe-page-shell/);
 assert.doesNotMatch(style.textContent, /position:fixed/);
+assert.match(style.textContent, /\.xe-binding > \.xe-page-shell > \.xe-main/);
+assert.doesNotMatch(style.textContent, /\.xe-binding \.xe-main/);
 
 async function verifyModalOpen() {
   clickHandler({ preventDefault() {} });
