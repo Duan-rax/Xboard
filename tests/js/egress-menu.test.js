@@ -16,6 +16,8 @@ const createElement = (extra = {}) => ({
   innerHTML: '',
   textContent: '',
   className: '',
+  scrollLeft: 0,
+  scrollTop: 0,
   classList: createClassList(),
   listeners: {},
   setAttribute(name, value) { this[name] = value; },
@@ -35,6 +37,7 @@ let bindInserted = false;
 let clickHandler = null;
 let documentClickHandler = null;
 let mutationCallback = null;
+let clampScrollOnListFetch = false;
 
 const mainModal = createElement();
 mainModal.remove = () => { mainInserted = false; };
@@ -124,17 +127,45 @@ global.localStorage = {
   getItem: () => null,
   key: () => null,
 };
-global.fetch = async () => ({
-  ok: true,
-  status: 200,
-  json: async () => ({
-    status: 'success',
-    data: {
-      items: [],
-      pagination: { current_page: 1, last_page: 1, total: 0 },
-    },
-  }),
-});
+global.fetch = async (url, options = {}) => {
+  if (clampScrollOnListFetch && String(url).includes('/fetch?')) {
+    contentHost.scrollTop = 0;
+    mainModal.scrollTop = 0;
+    clampScrollOnListFetch = false;
+  }
+  if (String(url).includes('/server/egress/save') && options.method === 'POST') {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: 'success',
+        data: {
+          id: 7,
+          name: 'Test egress',
+          protocol: 'socks5',
+          host: '127.0.0.1',
+          port: 1080,
+          tls_enabled: false,
+          tls_server_name: '',
+          allow_insecure: false,
+          enabled: true,
+          config: {},
+        },
+      }),
+    };
+  }
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      status: 'success',
+      data: {
+        items: [],
+        pagination: { current_page: 1, last_page: 1, total: 0 },
+      },
+    }),
+  };
+};
 global.document = {
   documentElement: {},
   head: { appendChild: (element) => { style = element; } },
@@ -187,6 +218,9 @@ assert.match(style.textContent, /\.xe-binding > \.xe-page-shell > \.xe-main/);
 assert.doesNotMatch(style.textContent, /\.xe-binding \.xe-main/);
 
 async function verifyModalOpen() {
+  contentHost.scrollTop = 320;
+  mainModal.scrollTop = 0;
+  clampScrollOnListFetch = true;
   clickHandler({ preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve));
 
@@ -198,6 +232,38 @@ assert.match(clonedAnchor.className, /bg-secondary/);
 assert.equal(routeAnchor['aria-current'], undefined);
 assert.equal(routeContent.style.display, 'none');
   assert.match(list.innerHTML, /没有匹配的出站配置/);
+  assert.equal(contentHost.scrollTop, 0, 'opening the page should start at the top');
+
+  contentHost.scrollTop = 240;
+  mainModal.scrollTop = 180;
+  clampScrollOnListFetch = true;
+  await mainModal.listeners.click({
+    target: {
+      closest(selector) {
+        return selector === '[data-xe-refresh]' ? {} : null;
+      },
+    },
+  });
+  assert.equal(contentHost.scrollTop, 240, 'catalog refresh must preserve the host scroll position');
+  assert.equal(mainModal.scrollTop, 180, 'catalog refresh must preserve the page scroll position');
+
+  formElements.get('xe-name').value = 'Test egress';
+  formElements.get('xe-host').value = '127.0.0.1';
+  formElements.get('xe-port').value = '1080';
+  formElements.get('xe-protocol').value = 'socks5';
+  formElements.get('xe-config').value = '{}';
+  contentHost.scrollTop = 360;
+  mainModal.scrollTop = 260;
+  clampScrollOnListFetch = true;
+  await mainModal.listeners.click({
+    target: {
+      closest(selector) {
+        return selector === '[data-xe-save]' ? { disabled: false } : null;
+      },
+    },
+  });
+  assert.equal(contentHost.scrollTop, 360, 'save must preserve the host scroll position');
+  assert.equal(mainModal.scrollTop, 260, 'save must preserve the page scroll position');
 
   routeAnchor['aria-current'] = 'page';
   routeAnchor.className = 'menu-link bg-secondary';

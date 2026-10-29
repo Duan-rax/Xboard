@@ -334,6 +334,48 @@
 
   const mainModal = () => document.getElementById(MODAL_ID);
   const bindModal = () => document.getElementById(BIND_MODAL_ID);
+
+  const scrollRoots = () => {
+    const roots = [
+      typeof window !== 'undefined' ? window : null,
+      document.scrollingElement,
+      document.documentElement,
+      document.body,
+      state.pageHost,
+      mainModal(),
+      bindModal(),
+    ];
+    return roots.filter((root, index) => root && roots.indexOf(root) === index);
+  };
+
+  const captureScrollPositions = () => scrollRoots().flatMap((root) => {
+    if (root === window) {
+      return Number.isFinite(Number(root.scrollY))
+        ? [{ root, left: Number(root.scrollX) || 0, top: Number(root.scrollY) || 0 }]
+        : [];
+    }
+    return Number.isFinite(Number(root.scrollTop))
+      ? [{ root, left: Number(root.scrollLeft) || 0, top: Number(root.scrollTop) || 0 }]
+      : [];
+  });
+
+  const setScrollPosition = (root, left, top) => {
+    if (root === window && typeof window.scrollTo === 'function') {
+      window.scrollTo(left, top);
+      return;
+    }
+    root.scrollLeft = left;
+    root.scrollTop = top;
+  };
+
+  const restoreScrollPositions = (positions) => {
+    positions.forEach(({ root, left, top }) => setScrollPosition(root, left, top));
+  };
+
+  const resetPageScroll = () => {
+    scrollRoots().forEach((root) => setScrollPosition(root, 0, 0));
+  };
+
   const setMenuActive = (active) => {
     if (!state.menuLink) return;
     if (active) {
@@ -486,7 +528,11 @@
   const renderList = async () => {
     const list = document.getElementById('xe-list');
     if (!list) return;
-    list.innerHTML = '<p class="xe-small">正在加载…</p>';
+    const scrollPositions = captureScrollPositions();
+    list.setAttribute?.('aria-busy', 'true');
+    if (!list.querySelector('table')) {
+      list.innerHTML = '<p class="xe-small">正在加载…</p>';
+    }
     try {
       const query = new URLSearchParams({ page: String(state.page), page_size: '20' });
       const search = valueOf('xe-search');
@@ -547,6 +593,9 @@
       }
     } catch (error) {
       list.innerHTML = `<p class="xe-error">${esc(error.message)}</p>`;
+    } finally {
+      restoreScrollPositions(scrollPositions);
+      list.removeAttribute?.('aria-busy');
     }
   };
 
@@ -603,7 +652,11 @@
   const loadBindNodes = async () => {
     const list = document.getElementById('xe-bind-list');
     if (!list || !state.bindProxy) return;
-    list.innerHTML = '<p>正在加载节点…</p>';
+    const scrollPositions = captureScrollPositions();
+    list.setAttribute?.('aria-busy', 'true');
+    if (!list.querySelector('.xe-node')) {
+      list.innerHTML = '<p>正在加载节点…</p>';
+    }
     try {
       const query = new URLSearchParams({
         page: String(state.bindPage),
@@ -639,6 +692,9 @@
       }
     } catch (error) {
       list.innerHTML = `<p class="xe-error">${esc(error.message)}</p>`;
+    } finally {
+      restoreScrollPositions(scrollPositions);
+      list.removeAttribute?.('aria-busy');
     }
   };
 
@@ -994,6 +1050,7 @@
     page.classList.add('open');
     page.setAttribute('aria-hidden', 'false');
     setMenuActive(true);
+    resetPageScroll();
     await renderList();
   };
 
