@@ -26,6 +26,7 @@ class ServerObserver
             'custom_outbounds',
             'custom_routes',
             'cert_config',
+            'egress_proxy_id',
         ])) {
             NodeSyncService::notifyConfigUpdated($server->id);
         }

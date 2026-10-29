@@ -121,6 +121,7 @@ class ServerSave extends FormRequest
             'route_ids' => 'nullable|array',
             'parent_id' => 'nullable|integer',
             'machine_id' => 'nullable|integer',
+            'egress_proxy_id' => 'nullable|integer|exists:v2_egress_proxy,id',
             'enabled' => 'nullable|boolean',
             'host' => 'required',
             'port' => 'required',

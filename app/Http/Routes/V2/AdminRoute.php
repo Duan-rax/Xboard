@@ -8,6 +8,7 @@ use App\Http\Controllers\V2\Admin\Server\GroupController;
 use App\Http\Controllers\V2\Admin\Server\RouteController;
 use App\Http\Controllers\V2\Admin\Server\ManageController;
 use App\Http\Controllers\V2\Admin\Server\MachineController;
+use App\Http\Controllers\V2\Admin\Server\EgressProxyController;
 use App\Http\Controllers\V2\Admin\OrderController;
 use App\Http\Controllers\V2\Admin\UserController;
 use App\Http\Controllers\V2\Admin\StatController;
@@ -78,6 +79,15 @@ class AdminRoute
                 $router->get('/fetch', [RouteController::class, 'fetch']);
                 $router->post('/save', [RouteController::class, 'save']);
                 $router->post('/drop', [RouteController::class, 'drop']);
+            });
+            // 出站管理：配置住宅/HTTP/SOCKS/协议落地并绑定现有节点。
+            $router->group([
+                'prefix' => 'server/egress'
+            ], function ($router) {
+                $router->get('/fetch', [EgressProxyController::class, 'fetch']);
+                $router->post('/save', [EgressProxyController::class, 'save']);
+                $router->post('/drop', [EgressProxyController::class, 'drop']);
+                $router->post('/bind', [EgressProxyController::class, 'bind']);
             });
             // 节点管理接口
             $router->group([

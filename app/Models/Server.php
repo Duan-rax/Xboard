@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
  * @property string|null $allow_insecure 是否允许不安全
  * @property string|null $network 网络类型
  * @property int|null $parent_id 父节点ID
+ * @property int|null $egress_proxy_id 已绑定的出站代理ID
  * @property float|null $rate 倍率
  * @property boolean $rate_time_enable 是否启用时间范围功能
  * @property array|null $rate_time_ranges 倍率时间范围
@@ -133,6 +134,7 @@ class Server extends Model
         'u' => 'integer',
         'd' => 'integer',
         'machine_id' => 'integer',
+        'egress_proxy_id' => 'integer',
     ];
 
     private const MULTIPLEX_CONFIGURATION = [
@@ -425,6 +427,11 @@ class Server extends Model
     public function machine(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(ServerMachine::class, 'machine_id');
+    }
+
+    public function egressProxy(): BelongsTo
+    {
+        return $this->belongsTo(EgressProxy::class, 'egress_proxy_id');
     }
 
     public function groups()

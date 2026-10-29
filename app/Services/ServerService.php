@@ -381,6 +381,17 @@ class ServerService
             $response['custom_routes'] = $node['custom_routes'];
         }
 
+        // The egress profile is intentionally exposed only on the
+        // authenticated node control-plane response, never in subscriptions.
+        // A disabled profile behaves as an unbound node and falls back to its
+        // normal direct outbound instead of leaving stale credentials active.
+        if ($node->egress_proxy_id) {
+            $egressProxy = $node->egressProxy;
+            if ($egressProxy && $egressProxy->enabled) {
+                $response['egress_proxy'] = $egressProxy->toNodeConfig();
+            }
+        }
+
         if (!empty($node['cert_config'])) {
             $certConfig = $node['cert_config'];
             // Normalize: accept both "mode" and "cert_mode" from the database
