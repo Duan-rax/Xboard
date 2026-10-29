@@ -857,9 +857,9 @@
 
   const openMain = async () => {
     ensureStyle();
+    const modal = ensureMainModal();
     ensureBindModal();
     resetForm();
-    const modal = ensureMainModal();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
     await renderList();
@@ -869,35 +869,55 @@
     ensureStyle();
     if (document.getElementById(MENU_ID)) return;
 
-    // Prefer the node-management leaf. The route leaf is a compatibility
-    // fallback for builds whose translated node-management label is absent.
-    const labels = new Set([
-      '节点管理', 'Server Management', 'Servers',
-      '路由管理', 'Route Management', 'Routes',
-    ]);
-    const anchor = [...document.querySelectorAll('a,button')]
-      .find((element) => labels.has(element.textContent.trim()));
+    // Select the actual leaf link, never the top-level "节点管理" group button.
+    // The route link is preferred so the new item appears after "路由管理".
+    const links = [...document.querySelectorAll('a[href]')];
+    const hasPath = (element, path) => {
+      const href = element.getAttribute('href') || element.href || '';
+      return new RegExp(`/${path}(?:/)?(?:[?#].*)?$`).test(href);
+    };
+    const anchor = links.find((element) => hasPath(element, 'server/route'))
+      || links.find((element) => hasPath(element, 'server/manage'))
+      || links.find((element) => ['路由管理', 'Route Management', 'Routes']
+        .includes(element.textContent.trim()));
     if (!anchor) return;
 
-    const item = anchor.cloneNode(true);
+    const leafItem = anchor.closest('li') || anchor;
+    const item = leafItem.cloneNode(true);
     item.id = MENU_ID;
-    if (item.matches('a')) item.setAttribute('href', '#');
+    const menuLink = item.matches('a') ? item : item.querySelector('a[href]');
+    if (!menuLink) return;
+    menuLink.setAttribute('href', '#');
+    menuLink.removeAttribute('aria-current');
     item.removeAttribute('data-state');
     item.querySelectorAll('[data-state]').forEach((element) => {
       element.removeAttribute('data-state');
     });
 
     // Keep the cloned icon and nested layout; only replace the matching label.
-    const textNode = [...item.querySelectorAll('*')]
+    const labels = new Set([
+      '路由管理', 'Route Management', 'Routes',
+      '节点管理', 'Node Management', 'Nodes',
+    ]);
+    const textHosts = [menuLink, ...menuLink.querySelectorAll('*')];
+    for (const host of textHosts) {
+      const textNode = [...(host.childNodes || [])]
+        .find((node) => node.nodeType === 3 && labels.has(node.nodeValue.trim()));
+      if (textNode) {
+        textNode.nodeValue = MENU_LABEL;
+        break;
+      }
+    }
+    const labelElement = [...menuLink.querySelectorAll('*')]
       .reverse()
-      .find((element) => labels.has(element.textContent.trim())) || item;
-    textNode.textContent = MENU_LABEL;
+      .find((element) => labels.has(element.textContent.trim()));
+    if (labelElement) labelElement.textContent = MENU_LABEL;
 
-    item.addEventListener('click', (event) => {
+    menuLink.addEventListener('click', (event) => {
       event.preventDefault();
       openMain();
     });
-    anchor.insertAdjacentElement('afterend', item);
+    leafItem.insertAdjacentElement('afterend', item);
   };
 
   new MutationObserver(installMenu).observe(document.documentElement, {
