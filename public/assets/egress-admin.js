@@ -664,12 +664,18 @@
         egress_proxy_id: proxyId,
       });
       state.selected.clear();
+      const changed = Number(result?.changed ?? ids.length);
       const confirmed = result?.sync?.confirmed_server_ids?.length || 0;
       const pending = result?.sync?.pending_server_ids?.length || 0;
+      if (changed === 0) {
+        showBindMessage('所选节点已经是目标状态，无需重载。');
+        await Promise.all([loadBindNodes(), renderList()]);
+        return;
+      }
       const syncMessage = pending
         ? `，${confirmed} 个节点已重载，${pending} 个节点仍在等待配置同步。`
         : '，节点均已确认重载。';
-      showBindMessage(`${action}完成，实际更新 ${result?.changed ?? ids.length} 个节点${syncMessage}`);
+      showBindMessage(`${action}完成，实际更新 ${changed} 个节点${syncMessage}`);
       await Promise.all([loadBindNodes(), renderList()]);
     } catch (error) {
       showBindMessage(error.message, true);
@@ -684,9 +690,12 @@
       const result = await api('/unbind-all', 'POST', {
         egress_proxy_id: Number(state.bindProxy.id),
       });
+      const changed = Number(result?.changed ?? 0);
       const pending = result?.sync?.pending_server_ids?.length || 0;
       showBindMessage(
-        `已解绑 ${result?.changed ?? 0} 个节点。${pending ? `${pending} 个节点仍待确认重载。` : '节点均已确认重载。'}`
+        changed === 0
+          ? '当前没有需要解绑的节点。'
+          : `已解绑 ${changed} 个节点。${pending ? `${pending} 个节点仍待确认重载。` : '节点均已确认重载。'}`
       );
       state.selected.clear();
       await Promise.all([loadBindNodes(), renderList()]);
