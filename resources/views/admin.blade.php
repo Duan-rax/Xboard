@@ -81,7 +81,7 @@
 
 <body>
   <div id="root"></div>
-  <script src="/assets/egress-admin.js?v={{ urlencode($version) }}" defer></script>
+  <script src="/assets/egress-admin.js?v={{ substr(md5_file(public_path('assets/egress-admin.js')), 0, 12) }}" defer></script>
 </body>
 
 </html>

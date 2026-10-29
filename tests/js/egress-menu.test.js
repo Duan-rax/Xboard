@@ -50,14 +50,15 @@ const bindElements = new Map();
   .forEach((id) => bindElements.set(`xe-${id}`, createElement()));
 
 const topGroup = createElement({ textContent: '节点管理' });
-const clonedIcon = { textContent: '' };
+const clonedIconHost = { innerHTML: '', textContent: '' };
 const clonedLabel = { nodeType: 3, nodeValue: '路由管理' };
 const clonedAnchor = createElement({
   textContent: '路由管理',
   childNodes: [{ nodeType: 1, textContent: '' }, clonedLabel],
   matches: selector => selector === 'a',
   querySelectorAll(selector) {
-    if (selector === '*') return [clonedIcon];
+    if (selector === '*') return [clonedIconHost];
+    if (selector === 'div') return [clonedIconHost];
     return [];
   },
 });
@@ -95,7 +96,22 @@ const routeItem = createElement({
   },
 });
 
-global.window = {};
+const routeContent = createElement({ style: { display: '' } });
+const bindSlot = createElement({
+  insertAdjacentHTML(position, html) {
+    assert.equal(position, 'beforeend');
+    if (html.includes('xboard-egress-binding-modal')) bindInserted = true;
+  },
+});
+const contentHost = createElement({
+  children: [routeContent],
+  insertAdjacentHTML(position, html) {
+    assert.equal(position, 'beforeend');
+    if (html.includes('xboard-egress-management-modal')) mainInserted = true;
+  },
+});
+
+global.window = { addEventListener() {} };
 global.localStorage = {
   length: 0,
   getItem: () => null,
@@ -115,26 +131,25 @@ global.fetch = async () => ({
 global.document = {
   documentElement: {},
   head: { appendChild: (element) => { style = element; } },
-  body: {
-    insertAdjacentHTML(position, html) {
-      assert.equal(position, 'beforeend');
-      if (html.includes('xboard-egress-management-modal')) mainInserted = true;
-      if (html.includes('xboard-egress-binding-modal')) bindInserted = true;
-    },
-  },
+  body: {},
   createElement: () => createElement(),
   getElementById(id) {
     if (id === 'xboard-egress-management-menu') return installed;
     if (id === 'xboard-egress-style') return style;
+    if (id === 'content') return contentHost;
     if (id === 'xboard-egress-management-modal') return mainInserted ? mainModal : null;
     if (id === 'xboard-egress-binding-modal') return bindInserted ? bindModal : null;
+    if (id === 'xe-bind-slot') return mainInserted ? bindSlot : null;
     if (id === 'xe-list') return mainInserted ? list : null;
     if (id === 'xe-pager') return mainInserted ? pager : null;
-    return formElements.get(id) || bindElements.get(id) || null;
+    if (formElements.has(id)) return mainInserted ? formElements.get(id) : null;
+    if (bindElements.has(id)) return bindInserted ? bindElements.get(id) : null;
+    return null;
   },
   querySelectorAll(selector) {
     if (selector === 'a[href]') return [routeAnchor];
     if (selector === 'a,button') return [topGroup, routeAnchor];
+    if (selector === 'main') return [contentHost];
     return [];
   },
   addEventListener() {},
@@ -148,21 +163,23 @@ assert.equal(installed, clonedItem, 'the leaf list item must be cloned');
 assert.equal(installed.id, 'xboard-egress-management-menu');
 assert.equal(clonedAnchor.href, '#');
 assert.equal(clonedLabel.nodeValue, '出站管理');
-assert.equal(clonedIcon.textContent, '', 'the cloned icon must be preserved');
+assert.match(clonedIconHost.innerHTML, /xe-menu-icon/);
 assert.equal(typeof clickHandler, 'function');
-assert.match(style.textContent, /background:hsl\(var\(--card,0 0% 100%\)\)/);
-assert.doesNotMatch(style.textContent, /background:var\(--background/);
+assert.match(style.textContent, /\.xe-page-shell/);
+assert.doesNotMatch(style.textContent, /position:fixed/);
 
 async function verifyModalOpen() {
   clickHandler({ preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve));
 
-  assert.equal(mainInserted, true, 'clicking the menu must insert the main modal');
-  assert.equal(bindInserted, true, 'clicking the menu must insert the binding modal');
+  assert.equal(mainInserted, true, 'clicking the menu must insert the embedded page');
+  assert.equal(bindInserted, true, 'the page must include the embedded binding view');
   assert.equal(mainModal.classList.contains('open'), true);
+  assert.equal(clonedAnchor['data-xe-active'], 'true');
+assert.equal(routeContent.style.display, 'none');
   assert.match(list.innerHTML, /没有匹配的出站配置/);
 
-  console.log('egress menu insertion and modal-open test passed');
+  console.log('egress menu, embedded page, and catalog test passed');
 }
 
 verifyModalOpen().catch((error) => {

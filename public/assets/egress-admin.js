@@ -17,6 +17,13 @@
   const BIND_MODAL_ID = 'xboard-egress-binding-modal';
   const STYLE_ID = 'xboard-egress-style';
   const MENU_LABEL = '出站管理';
+  const MENU_ICON = `
+    <svg class="xe-menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="8" height="16" rx="2"></rect>
+      <path d="M6 8h2M6 12h2M6 16h2"></path>
+      <path d="M13 12h7"></path>
+      <path d="m17 8 4 4-4 4"></path>
+    </svg>`;
 
   const state = {
     page: 1,
@@ -31,6 +38,9 @@
     bindSearch: '',
     bindNodes: [],
     selected: new Set(),
+    pageHost: null,
+    hiddenHostChildren: [],
+    menuLink: null,
     busy: false,
   };
 
@@ -143,17 +153,15 @@
   };
 
   const css = `
-    #${MODAL_ID},#${BIND_MODAL_ID}{position:fixed;inset:0;z-index:9999;display:none;background:rgba(15,23,42,.52);align-items:center;justify-content:center;padding:16px;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-    #${BIND_MODAL_ID}{z-index:10000}
-    #${MODAL_ID}.open,#${BIND_MODAL_ID}.open{display:flex}
-    #${MODAL_ID} .xe-card,#${BIND_MODAL_ID} .xe-card{width:min(1180px,96vw);max-height:92vh;overflow:auto;background:hsl(var(--card,0 0% 100%));border:1px solid hsl(var(--border,214 32% 91%));border-radius:16px;box-shadow:0 25px 70px rgba(2,6,23,.35);color:hsl(var(--card-foreground,222.2 84% 4.9%))}
-    #${BIND_MODAL_ID} .xe-card{width:min(860px,96vw)}
-    #${MODAL_ID} .xe-head,#${BIND_MODAL_ID} .xe-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 24px;border-bottom:1px solid hsl(var(--border,214 32% 91%))}
-    #${MODAL_ID} h2,#${BIND_MODAL_ID} h2{margin:0;font-size:19px;line-height:1.3}
+    #${MODAL_ID}{display:none;height:100%;overflow:auto;background:hsl(var(--background,0 0% 100%));color:hsl(var(--foreground,222.2 84% 4.9%));font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    #${MODAL_ID}.open{display:block}
+    #${MODAL_ID} .xe-page-shell{max-width:1440px;margin:0 auto;padding:28px clamp(20px,3vw,40px) 40px}
+    #${MODAL_ID} .xe-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+    #${MODAL_ID} h1,#${BIND_MODAL_ID} h2{margin:0;font-size:26px;line-height:1.25;font-weight:700}
     #${MODAL_ID} p,#${BIND_MODAL_ID} p{margin:6px 0 0;color:#64748b;font-size:12.5px;line-height:1.6}
-    #${MODAL_ID} .xe-main{display:grid;grid-template-columns:minmax(0,0.95fr) minmax(0,1.25fr);gap:16px;padding:18px 24px 24px}
-    #${BIND_MODAL_ID} .xe-main{padding:16px 24px 20px}
-    #${MODAL_ID} .xe-panel{border:1px solid hsl(var(--border,214 32% 91%));border-radius:12px;padding:16px;min-width:0}
+    #${MODAL_ID} .xe-main{display:grid;grid-template-columns:minmax(0,0.9fr) minmax(0,1.35fr);gap:18px}
+    #${MODAL_ID}.xe-binding .xe-main{display:none}
+    #${MODAL_ID} .xe-panel,#${BIND_MODAL_ID}{background:hsl(var(--card,0 0% 100%));border:1px solid hsl(var(--border,214 32% 91%));border-radius:12px;padding:18px;min-width:0;color:hsl(var(--card-foreground,222.2 84% 4.9%))}
     #${MODAL_ID} .xe-panel h3,#${BIND_MODAL_ID} h3{margin:0 0 10px;font-size:14px}
     #${MODAL_ID} label{display:block;margin:9px 0 4px;color:#475569;font-size:12px;font-weight:600}
     #${MODAL_ID} input,#${MODAL_ID} select,#${MODAL_ID} textarea,#${BIND_MODAL_ID} input,#${BIND_MODAL_ID} select{box-sizing:border-box;width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#0f172a;font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -181,6 +189,11 @@
     #${MODAL_ID} .xe-badge.xe-on{background:#dcfce7;color:#15803d}
     #${MODAL_ID} .xe-badge.xe-off{background:#fee2e2;color:#b91c1c}
     #${MODAL_ID} .xe-badge.xe-tls{background:#dbeafe;color:#1d4ed8}
+    #${MODAL_ID} .xe-bind-panel{display:none}
+    #${BIND_MODAL_ID}{display:none;margin-top:18px}
+    #${BIND_MODAL_ID}.open{display:block}
+    #${BIND_MODAL_ID} .xe-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:16px;border-bottom:1px solid hsl(var(--border,214 32% 91%))}
+    #${BIND_MODAL_ID} .xe-main{padding:16px 0 20px}
     #${BIND_MODAL_ID} .xe-badge.xe-bound{background:#fef3c7;color:#92400e;margin-left:6px}
     #${BIND_MODAL_ID} .xe-node{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid #eef2f7;border-radius:9px;margin-bottom:6px;cursor:pointer;font-weight:400}
     #${BIND_MODAL_ID} .xe-node:hover{background:#f8fafc}
@@ -188,10 +201,11 @@
     #${BIND_MODAL_ID} .xe-node-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
     #${BIND_MODAL_ID} .xe-node-name{font-size:13px;font-weight:600;color:#0f172a}
     #${BIND_MODAL_ID} .xe-node-side{flex:none;text-align:right}
-    #${BIND_MODAL_ID} .xe-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:14px 24px;border-top:1px solid hsl(var(--border,214 32% 91%))}
+    #${BIND_MODAL_ID} .xe-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:14px;border-top:1px solid hsl(var(--border,214 32% 91%))}
     #${BIND_MODAL_ID} .xe-foot .xe-small{margin-right:auto}
     #${MODAL_ID} .xe-hint{color:#64748b;font-size:11px;line-height:1.55;margin-top:4px}
-    @media(max-width:860px){#${MODAL_ID} .xe-main{grid-template-columns:1fr}#${MODAL_ID} .xe-card,#${BIND_MODAL_ID} .xe-card{max-height:95vh}}
+    #${MENU_ID} a[data-xe-active="true"]{background:hsl(var(--accent,210 40% 96.1%));color:hsl(var(--accent-foreground,222.2 47.4% 11.2%))}
+    @media(max-width:900px){#${MODAL_ID} .xe-main{grid-template-columns:1fr}#${MODAL_ID} .xe-page-shell{padding:22px 16px 32px}}
   `;
 
   const ensureStyle = () => {
@@ -203,15 +217,14 @@
   };
 
   const mainModalHtml = () => `
-    <div id="${MODAL_ID}" aria-hidden="true">
-      <div class="xe-card" role="dialog" aria-modal="true" aria-labelledby="xe-title">
-        <div class="xe-head">
+    <section id="${MODAL_ID}" aria-hidden="true">
+      <div class="xe-page-shell">
+        <header class="xe-page-head">
           <div>
-            <h2 id="xe-title">出站管理</h2>
+            <h1 id="xe-title">出站管理</h1>
             <p>为节点绑定落地代理。凭据只下发给已认证的节点控制面，不会进入订阅或用户 API。仅支持包含 egress_proxy 的 Xboard-Node 构建。</p>
           </div>
-          <button class="xe-secondary" data-xe-close>关闭</button>
-        </div>
+        </header>
         <div class="xe-main">
           <section class="xe-panel">
             <h3>新增 / 编辑出站</h3>
@@ -268,7 +281,7 @@
               <span id="xe-message" class="xe-small"></span>
             </div>
           </section>
-          <section class="xe-panel">
+          <section class="xe-panel" id="xe-catalog-panel">
             <h3>现有出站</h3>
             <div class="xe-toolbar">
               <input id="xe-search" placeholder="搜索名称、地址或协议">
@@ -279,47 +292,49 @@
             <div id="xe-pager" class="xe-pager"></div>
           </section>
         </div>
+        <div id="xe-bind-slot"></div>
       </div>
-    </div>`;
+    </section>`;
 
   const bindModalHtml = () => `
-    <div id="${BIND_MODAL_ID}" aria-hidden="true">
-      <div class="xe-card" role="dialog" aria-modal="true" aria-labelledby="xe-bind-title">
-        <div class="xe-head">
-          <div>
-            <h2 id="xe-bind-title">节点绑定</h2>
-            <p>勾选节点后批量绑定或解绑。一个节点同时只能使用一个出站资料；解绑后节点恢复默认 direct 出站。</p>
-          </div>
-          <button class="xe-secondary" data-xe-bind-close>关闭</button>
+    <section id="${BIND_MODAL_ID}" class="xe-bind-panel" aria-hidden="true">
+      <div class="xe-head">
+        <div>
+          <h2 id="xe-bind-title">节点绑定</h2>
+          <p>勾选节点后批量绑定或解绑。一个节点同时只能使用一个出站资料；解绑后节点恢复默认 direct 出站。</p>
         </div>
-        <div class="xe-main">
-          <div class="xe-toolbar">
-            <input id="xe-bind-search" placeholder="搜索节点名称或地址">
-            <select id="xe-bind-filter" style="width:auto">
-              <option value="all">全部节点</option>
-              <option value="unbound">未绑定</option>
-              <option value="current">已绑定到当前出站</option>
-              <option value="bound">已绑定任意出站</option>
-            </select>
-            <button class="xe-secondary" data-xe-bind-search>搜索</button>
-            <button class="xe-secondary" data-xe-bind-refresh>刷新</button>
-          </div>
-          <label class="xe-small"><input id="xe-bind-select-page" type="checkbox" style="width:auto"> 全选本页</label>
-          <div id="xe-bind-list" class="xe-small">正在加载…</div>
-          <div id="xe-bind-pager" class="xe-pager"></div>
-        </div>
-        <div class="xe-foot">
-          <span class="xe-small" id="xe-bind-selected-count">未选择节点</span>
-          <button data-xe-bind-selected>绑定所选</button>
-          <button class="xe-secondary" data-xe-unbind-selected>解绑所选</button>
-          <button class="xe-danger" data-xe-unbind-all>解绑全部</button>
-          <span id="xe-bind-message" class="xe-small"></span>
-        </div>
+        <button class="xe-secondary" data-xe-bind-close>返回列表</button>
       </div>
-    </div>`;
+      <div class="xe-main">
+        <div class="xe-toolbar">
+          <input id="xe-bind-search" placeholder="搜索节点名称或地址">
+          <select id="xe-bind-filter" style="width:auto">
+            <option value="all">全部节点</option>
+            <option value="unbound">未绑定</option>
+            <option value="current">已绑定到当前出站</option>
+            <option value="bound">已绑定任意出站</option>
+          </select>
+          <button class="xe-secondary" data-xe-bind-search>搜索</button>
+          <button class="xe-secondary" data-xe-bind-refresh>刷新</button>
+        </div>
+        <label class="xe-small"><input id="xe-bind-select-page" type="checkbox" style="width:auto"> 全选本页</label>
+        <div id="xe-bind-list" class="xe-small">正在加载…</div>
+        <div id="xe-bind-pager" class="xe-pager"></div>
+      </div>
+      <div class="xe-foot">
+        <span class="xe-small" id="xe-bind-selected-count">未选择节点</span>
+        <button data-xe-bind-selected>绑定所选</button>
+        <button class="xe-secondary" data-xe-unbind-selected>解绑所选</button>
+        <button class="xe-danger" data-xe-unbind-all>解绑全部</button>
+        <span id="xe-bind-message" class="xe-small"></span>
+      </div>
+    </section>`;
 
   const mainModal = () => document.getElementById(MODAL_ID);
   const bindModal = () => document.getElementById(BIND_MODAL_ID);
+  const setMenuActive = (active) => {
+    state.menuLink?.setAttribute('data-xe-active', active ? 'true' : 'false');
+  };
 
   const showMessage = (message, error = false) => {
     const el = document.getElementById('xe-message');
@@ -617,6 +632,7 @@
     if (filter) filter.value = 'all';
     showBindMessage('');
 
+    mainModal()?.classList.add('xe-binding');
     bindModal()?.classList.add('open');
     bindModal()?.setAttribute('aria-hidden', 'false');
     await loadBindNodes();
@@ -625,6 +641,7 @@
   const closeBind = () => {
     bindModal()?.classList.remove('open');
     bindModal()?.setAttribute('aria-hidden', 'true');
+    mainModal()?.classList.remove('xe-binding');
     state.selected.clear();
     state.bindProxy = null;
   };
@@ -673,9 +690,8 @@
   const handleMainClick = async (event) => {
     const modal = mainModal();
     if (!modal) return;
-    if (event.target === modal || event.target.closest('[data-xe-close]')) {
-      modal.classList.remove('open');
-      modal.setAttribute('aria-hidden', 'true');
+    if (event.target.closest('[data-xe-close]')) {
+      closeMainPage();
       return;
     }
     if (event.target.closest('[data-xe-reset]')) {
@@ -781,7 +797,7 @@
   const handleBindClick = async (event) => {
     const modal = bindModal();
     if (!modal) return;
-    if (event.target === modal || event.target.closest('[data-xe-bind-close]')) {
+    if (event.target.closest('[data-xe-bind-close]')) {
       closeBind();
       return;
     }
@@ -814,11 +830,21 @@
   };
 
   const ensureMainModal = () => {
-    let modal = mainModal();
-    if (modal) return modal;
-    document.body.insertAdjacentHTML('beforeend', mainModalHtml());
-    modal = mainModal();
-    modal.addEventListener('click', handleMainClick);
+    let page = mainModal();
+    if (page) return page;
+    const host = document.getElementById('content') || document.querySelector('main');
+    if (!host) return null;
+
+    state.pageHost = host;
+    state.hiddenHostChildren = [];
+    [...host.children].forEach((child) => {
+      state.hiddenHostChildren.push({ element: child, display: child.style.display });
+      child.style.display = 'none';
+    });
+    host.insertAdjacentHTML('beforeend', mainModalHtml());
+    page = mainModal();
+    if (!page) return null;
+    page.addEventListener('click', handleMainClick);
     const search = document.getElementById('xe-search');
     search?.addEventListener('keydown', async (event) => {
       if (event.key === 'Enter') {
@@ -828,14 +854,17 @@
       }
     });
     document.getElementById('xe-protocol')?.addEventListener('change', syncProtocolUi);
-    return modal;
+    return page;
   };
 
   const ensureBindModal = () => {
     let modal = bindModal();
     if (modal) return modal;
-    document.body.insertAdjacentHTML('beforeend', bindModalHtml());
+    const slot = document.getElementById('xe-bind-slot');
+    if (!slot) return null;
+    slot.insertAdjacentHTML('beforeend', bindModalHtml());
     modal = bindModal();
+    if (!modal) return null;
     modal.addEventListener('click', handleBindClick);
     modal.addEventListener('change', handleBindChange);
     const search = document.getElementById('xe-bind-search');
@@ -855,13 +884,34 @@
     return modal;
   };
 
+  const closeMainPage = () => {
+    const page = mainModal();
+    if (!page) return;
+    closeBind();
+    setMenuActive(false);
+    page.classList.remove('open');
+    page.setAttribute('aria-hidden', 'true');
+    state.hiddenHostChildren.forEach(({ element, display }) => {
+      element.style.display = display;
+    });
+    state.hiddenHostChildren = [];
+    state.pageHost = null;
+    page.remove();
+  };
+
   const openMain = async () => {
     ensureStyle();
-    const modal = ensureMainModal();
+    const page = ensureMainModal();
+    if (!page) {
+      console.error('无法找到 Xboard 后台主内容区，出站管理页面未加载。');
+      return;
+    }
     ensureBindModal();
+    closeBind();
     resetForm();
-    modal.classList.add('open');
-    modal.setAttribute('aria-hidden', 'false');
+    page.classList.add('open');
+    page.setAttribute('aria-hidden', 'false');
+    setMenuActive(true);
     await renderList();
   };
 
@@ -889,6 +939,8 @@
     if (!menuLink) return;
     menuLink.setAttribute('href', '#');
     menuLink.removeAttribute('aria-current');
+    menuLink.setAttribute('data-xe-active', 'false');
+    state.menuLink = menuLink;
     item.removeAttribute('data-state');
     item.querySelectorAll('[data-state]').forEach((element) => {
       element.removeAttribute('data-state');
@@ -912,6 +964,8 @@
       .reverse()
       .find((element) => labels.has(element.textContent.trim()));
     if (labelElement) labelElement.textContent = MENU_LABEL;
+    const iconHost = menuLink.querySelector('div');
+    if (iconHost) iconHost.innerHTML = MENU_ICON;
 
     menuLink.addEventListener('click', (event) => {
       event.preventDefault();
@@ -919,6 +973,13 @@
     });
     leafItem.insertAdjacentElement('afterend', item);
   };
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest?.('a[href]');
+    if (!link || link.closest(`#${MENU_ID}`) || link.closest(`#${MODAL_ID}`)) return;
+    closeMainPage();
+  }, true);
+  window.addEventListener('hashchange', closeMainPage);
 
   new MutationObserver(installMenu).observe(document.documentElement, {
     childList: true,
