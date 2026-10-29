@@ -11,7 +11,24 @@
 
 ## 📖 Introduction
 
-Xboard is a modern panel system built on Laravel 11, focusing on providing a clean and efficient user experience.
+Xboard is a modern panel system built on Laravel 12, focusing on providing a clean and efficient user experience.
+
+## 🏷️ Fork milestone
+
+This fork is released as coordinated panel and node versions. The current
+milestone is **v2026.10.30**.
+
+- Managed egress profiles can be created, edited, tested and batch-bound to
+  nodes from an embedded **出站管理** page.
+- Binding changes are pushed to nodes and confirmed through an applied-config
+  acknowledgement flow.
+- The node hot-swaps the selected outbound without restarting its kernel or
+  disconnecting the control-plane WebSocket.
+- The companion node release is available from
+  [Duan-rax/Xboard-Node](https://github.com/Duan-rax/Xboard-Node/releases).
+
+See [managed egress administration](./docs/egress-management.md) and the
+[changelog](./CHANGELOG.md).
 
 ## ✨ Features
 
@@ -20,11 +37,13 @@ Xboard is a modern panel system built on Laravel 11, focusing on providing a cle
 - 📱 Modern user frontend (Vue3 + TypeScript)
 - 🐳 Ready-to-use Docker deployment solution
 - 🎯 Optimized system architecture for better maintainability
+- 🌐 Administrator-managed egress profiles with real proxy tests, batch
+  bindings, node acknowledgements and non-disruptive node-side hot reload
 
 ## 🚀 Quick Start
 
 ```bash
-git clone -b compose --depth 1 https://github.com/cedar2025/Xboard && \
+git clone -b compose --depth 1 https://github.com/Duan-rax/Xboard.git && \
 cd Xboard && \
 docker compose run -it --rm \
     -e ENABLE_SQLITE=true \
@@ -44,6 +63,8 @@ docker compose up -d
 
 ### Development Guides
 - [Plugin Development Guide](./docs/en/development/plugin-development-guide.md) - Complete guide for developing XBoard plugins
+- [Managed egress administration](./docs/egress-management.md)
+- [Release process](./docs/release-process.md)
 
 ### Deployment Guides
 
@@ -61,7 +82,7 @@ PHP **8.2.35 or later** is required. Use the latest security patch for your PHP 
 
 ## 🛠️ Tech Stack
 
-- Backend: Laravel 11 + Octane
+- Backend: Laravel 12 + Octane
 - Admin Panel: React + Shadcn UI + TailwindCSS
 - User Frontend: Vue3 + TypeScript + NaiveUI
 - Deployment: Docker + Docker Compose
@@ -97,6 +118,12 @@ However, new feature development may be limited.
 ```bash
 docker compose restart
 ```
+
+## 📦 Releases
+
+Releases use date-based immutable tags such as `v2026.10.30`. Panel images are
+built natively on SGP after CI and compatibility checks pass; a GitHub Release
+records the source commit, deploy image and companion node version.
 
 2. For aaPanel installations, restart the Octane daemon process
 

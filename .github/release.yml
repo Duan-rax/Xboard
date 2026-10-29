@@ -1,0 +1,20 @@
+changelog:
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking-change
+    - title: Egress management
+      labels:
+        - egress
+        - enhancement
+    - title: Fixes
+      labels:
+        - bug
+        - fix
+    - title: Documentation and CI
+      labels:
+        - documentation
+        - ci
+    - title: Other changes
+      labels:
+        - "*"
