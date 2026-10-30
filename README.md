@@ -64,6 +64,7 @@ docker compose up -d
 ### Development Guides
 - [Plugin Development Guide](./docs/en/development/plugin-development-guide.md) - Complete guide for developing XBoard plugins
 - [Managed egress administration](./docs/egress-management.md)
+- [Structured route management](./docs/route-management-v2.md)
 - [Release process](./docs/release-process.md)
 
 ### Deployment Guides

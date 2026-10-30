@@ -114,7 +114,32 @@ class ServerService
     // 获取路由规则
     public static function getRoutes(array $routeIds)
     {
-        $routes = ServerRoute::select(['id', 'match', 'action', 'action_value'])->whereIn('id', $routeIds)->get();
+        $routes = ServerRoute::select([
+            'id',
+            'remarks',
+            'match',
+            'criteria',
+            'match_mode',
+            'priority',
+            'enabled',
+            'action',
+            'action_value',
+        ])
+            ->whereIn('id', $routeIds)
+            ->orderBy('priority')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ServerRoute $route) => [
+                'id' => $route->id,
+                'remarks' => $route->remarks,
+                'match' => $route->match ?? [],
+                'criteria' => $route->criteria,
+                'match_mode' => $route->match_mode ?: 'any',
+                'priority' => $route->priority,
+                'disabled' => !$route->enabled,
+                'action' => $route->action,
+                'action_value' => $route->action_value,
+            ]);
         return $routes;
     }
 

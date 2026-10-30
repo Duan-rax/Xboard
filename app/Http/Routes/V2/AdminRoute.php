@@ -79,6 +79,9 @@ class AdminRoute
                 $router->get('/fetch', [RouteController::class, 'fetch']);
                 $router->post('/save', [RouteController::class, 'save']);
                 $router->post('/drop', [RouteController::class, 'drop']);
+                $router->post('/sort', [RouteController::class, 'sort']);
+                $router->get('/options', [RouteController::class, 'options']);
+                $router->post('/preview', [RouteController::class, 'preview']);
             });
             // 出站管理：配置住宅/HTTP/SOCKS/协议落地并绑定现有节点。
             $router->group([

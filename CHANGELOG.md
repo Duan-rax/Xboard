@@ -2,6 +2,20 @@
 
 Release dates use the `Asia/Singapore` timezone.
 
+## Unreleased
+
+### Added
+
+- Structured route-management editor with exact domains, domain suffixes,
+  IP/CIDR, ports, networks, source CIDRs and source ports.
+- `any` and `all` matching modes, explicit priority ordering, enable/disable
+  controls and rule validation preview.
+- Route target suggestions for panel custom outbounds and managed egress
+  profiles.
+- Backward-compatible route schema migration; existing `match` rules continue
+  to work without data conversion.
+- Sing-box and Xray priority-aware structured route compilation.
+
 ## 2026.10.30.2
 
 Release: `v2026.10.30.2`
