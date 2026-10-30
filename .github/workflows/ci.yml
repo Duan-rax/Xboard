@@ -57,6 +57,16 @@ jobs:
           node --check public/assets/route-admin.js
           node tests/js/route-admin.test.js
 
+      - name: Set up Go for egress probe
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: tools/egress-probe/go.sum
+
+      - name: Test egress probe
+        working-directory: tools/egress-probe
+        run: go test ./...
+
       - name: Run egress configuration test
         run: |
           vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php

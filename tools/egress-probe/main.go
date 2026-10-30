@@ -175,18 +175,18 @@ func probeConfig(proxy egressProxy, port int) map[string]any {
 	switch protocol {
 	case "socks5":
 		outbound["version"] = "5"
+		setUserPassword(outbound, proxy)
+	case "http":
+		setUserPassword(outbound, proxy)
 	case "shadowsocks":
 		outbound["method"] = stringValue(proxy.Config, "method")
+		outbound["password"] = proxy.Password
 	case "vless":
 		outbound["uuid"] = stringValue(proxy.Config, "uuid")
 		if flow := stringValue(proxy.Config, "flow"); flow != "" {
 			outbound["flow"] = flow
 		}
-	}
-	if proxy.Username != "" {
-		outbound["username"] = proxy.Username
-	}
-	if proxy.Password != "" {
+	case "trojan":
 		outbound["password"] = proxy.Password
 	}
 	if tls := tlsConfig(proxy); tls != nil {
@@ -208,6 +208,15 @@ func probeConfig(proxy egressProxy, port int) map[string]any {
 			map[string]any{"type": "direct", "tag": "direct"},
 		},
 		"route": map[string]any{"final": tag},
+	}
+}
+
+func setUserPassword(outbound map[string]any, proxy egressProxy) {
+	if proxy.Username != "" {
+		outbound["username"] = proxy.Username
+	}
+	if proxy.Password != "" {
+		outbound["password"] = proxy.Password
 	}
 }
 
@@ -241,6 +250,14 @@ func tlsConfig(proxy egressProxy) map[string]any {
 			"public_key": reality["public_key"],
 			"short_id":   reality["short_id"],
 		}
+		fingerprint := stringValue(reality, "fingerprint")
+		if fingerprint == "" {
+			fingerprint = stringValue(proxy.Config, "fingerprint")
+		}
+		if fingerprint == "" {
+			fingerprint = "chrome"
+		}
+		tls["utls"] = map[string]any{"enabled": true, "fingerprint": fingerprint}
 	}
 	return tls
 }
