@@ -18,7 +18,31 @@
     }
     return `${size.toFixed(index ? 2 : 0)} ${units[index]}`;
   };
-  const time = (value) => value ? new Date(value).toLocaleString() : '-';
+  const auditTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const time = (value) => {
+    if (!value) return '-';
+    let raw = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw)) {
+      raw = `${raw.replace(' ', 'T')}Z`;
+    }
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return '-';
+    const parts = Object.fromEntries(
+      auditTimeFormatter.formatToParts(date)
+        .filter((part) => part.type !== 'literal')
+        .map((part) => [part.type, part.value]),
+    );
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+  };
 
   const css = `
     #${PAGE}{height:100%;overflow:auto;background:hsl(var(--background,0 0% 100%));color:hsl(var(--foreground,222.2 84% 4.9%))}
@@ -87,7 +111,7 @@
             <div id="sa-events" class="sa-small">正在加载…</div>
             <div class="sa-pager"><span class="sa-small" id="sa-page-info"></span><div><button class="secondary" data-sa-prev>上一页</button> <button class="secondary" data-sa-next>下一页</button></div></div>
           </section>
-          <div class="sa-note sa-warning">Xray 访问日志提供目标、用户与连接数，但不提供单连接字节数；对应的连接流量字段为空。平台累计流量请看“审计概览”。</div>
+          <div class="sa-note sa-warning">Xray 访问日志提供目标、用户与连接数，但不提供单连接字节数；对应的连接流量字段为空。sing-box 若 20 秒内仍无法关联身份，用户列会显示“未关联”。平台累计流量请看“审计概览”。</div>
         </section>
         <section data-sa-panel="rules" hidden>
           <section class="sa-panel"><h2>规则命中排行</h2><div id="sa-routes" class="sa-small">正在加载…</div></section>
@@ -171,7 +195,7 @@
     if (!el) return;
     el.innerHTML = state.events.length ? `<div class="sa-table-wrap"><table><thead><tr><th>时间</th><th>用户</th><th>节点</th><th>目标</th><th>规则/动作</th><th>出站</th><th>流量</th></tr></thead><tbody>${state.events.map((row) => `
       <tr><td>${time(row.occurred_at)}</td>
-      <td>${row.user_id ? `<button class="sa-user-link" data-sa-user="${row.user_id}">${esc(row.user_name || `#${row.user_id}`)}</button>` : '-'}</td>
+      <td>${row.user_id ? `<button class="sa-user-link" data-sa-user="${row.user_id}">${esc(row.user_name || `#${row.user_id}`)}</button>` : '<span class="sa-small">未关联</span>'}</td>
       <td>${esc(row.node_id || '-')}</td>
       <td><code>${esc(row.destination || row.destination_ip || '-')}</code><br><span class="sa-small">${esc(row.network || '')} ${esc(row.protocol || '')}</span></td>
       <td>${esc(row.route_name || row.route_tag || `规则 #${row.route_id || '-'}`)}<br><span class="sa-badge ${row.action === 'block' || row.action === 'reject' ? 'block' : 'route'}">${esc(row.action)}</span></td>

@@ -288,6 +288,10 @@ async function verify() {
   assert.equal(menu.id, 'xboard-security-audit-menu');
   assert.equal(groupLabelNode.nodeValue, '安全审计');
   assert.equal(sectionLinks.length, 5);
+  assert.equal(
+    globalThis.XboardSecurityAudit.time('2026-10-30 19:49:15'),
+    '2026-10-31 03:49:15',
+  );
   assert.deepEqual(sectionLinks.map((link) => link.textContent), ['审计概览', '流量明细', '规则命中', '用户审计', '审计设置']);
   assert.equal(menu.classList.contains('sa-nav-group'), true);
   assert.equal(submenu.id, 'xboard-security-audit-menu-sections');
