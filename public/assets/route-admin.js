@@ -139,6 +139,10 @@
     #${PAGE_ID} .xe-badge{display:inline-block;padding:1px 6px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:10.5px;font-weight:600}
     #${PAGE_ID} .xe-badge.on{background:#dcfce7;color:#15803d}
     #${PAGE_ID} .xe-badge.off{background:#fee2e2;color:#b91c1c}
+    #${PAGE_ID} .xe-badge.info{background:#e0f2fe;color:#0369a1}
+    #${PAGE_ID} .xe-badge.warning{background:#fef3c7;color:#b45309}
+    #${PAGE_ID} .xe-badge.error{background:#fee2e2;color:#b91c1c}
+    #${PAGE_ID} .xe-diagnostic-summary{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}
     #${PAGE_ID} .xe-row-actions{display:flex;gap:5px;flex-wrap:wrap}
     #${PAGE_ID} .xe-preview{margin-top:12px;padding:10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;max-height:260px;overflow:auto}
     #${PAGE_ID} .xe-help{font-size:11px;color:#64748b;line-height:1.55;margin-top:4px}
@@ -274,6 +278,7 @@
               <button class="secondary" data-xe-refresh>刷新</button>
               <button class="secondary" data-xe-renumber>按当前顺序重新编号</button>
             </div>
+            <div id="xe-diagnostic-summary" class="xe-diagnostic-summary">正在分析规则健康状态…</div>
             <div id="xe-list">正在加载…</div>
           </section>
         </div>
@@ -512,9 +517,47 @@
     return route.action;
   };
 
+  const diagnosticLabel = {
+    shadowed_rule: '规则被遮蔽',
+    duplicate_rule: '重复规则',
+    missing_proxy_target: '出站 Tag 缺失',
+    unbound_rule: '未绑定节点',
+  };
+
+  const routeDiagnostics = (route) => Array.isArray(route?.diagnostics) ? route.diagnostics : [];
+
+  const renderDiagnosticBadges = (route) => routeDiagnostics(route).map((diagnostic) => {
+    const severity = ['error', 'warning', 'info'].includes(diagnostic.severity)
+      ? diagnostic.severity
+      : 'info';
+    const label = diagnosticLabel[diagnostic.code] || '诊断提示';
+    return `<span class="xe-badge ${severity}" title="${esc(diagnostic.message || label)}">${esc(label)}</span>`;
+  }).join(' ');
+
+  const renderDiagnosticSummary = () => {
+    const target = document.getElementById('xe-diagnostic-summary');
+    if (!target) return;
+    const counts = { error: 0, warning: 0, info: 0 };
+    state.routes.forEach((route) => routeDiagnostics(route).forEach((diagnostic) => {
+      const severity = ['error', 'warning', 'info'].includes(diagnostic.severity)
+        ? diagnostic.severity
+        : 'info';
+      counts[severity] += 1;
+    }));
+    const total = counts.error + counts.warning + counts.info;
+    target.innerHTML = total
+      ? `<strong>规则诊断</strong>
+         ${counts.error ? `<span class="xe-badge error">${counts.error} 个冲突</span>` : ''}
+         ${counts.warning ? `<span class="xe-badge warning">${counts.warning} 个警告</span>` : ''}
+         ${counts.info ? `<span class="xe-badge info">${counts.info} 个提示</span>` : ''}
+         <span class="xe-help">仅报告确定性问题，不推测 CIDR 或正则之间的部分重叠。</span>`
+      : '<strong>规则诊断</strong><span class="xe-badge on">未发现确定性冲突</span>';
+  };
+
   const renderList = () => {
     const list = document.getElementById('xe-list');
     if (!list) return;
+    renderDiagnosticSummary();
     const items = state.routes.filter(matchesSearch);
     if (!items.length) {
       list.innerHTML = '<p>没有匹配的路由规则。</p>';
@@ -533,6 +576,7 @@
                   ? '<span class="xe-badge off">停用</span>'
                   : '<span class="xe-badge on">启用</span>'}
                 <span class="xe-badge">${route.match_mode === 'all' ? '全部条件' : '任一条件'}</span>
+                ${renderDiagnosticBadges(route)}
               </td>
               <td class="xe-mono">${esc(criteriaSummary(route))}</td>
               <td>${esc(actionLabel(route))}</td>
@@ -755,8 +799,17 @@
   const preview = async () => {
     try {
       const result = await api('/preview', 'POST', readForm());
+      const diagnostics = Array.isArray(result?.diagnostics) ? result.diagnostics : [];
       document.getElementById('xe-preview').textContent = JSON.stringify(result, null, 2);
-      showMessage('校验通过。');
+      if (diagnostics.some((item) => item.severity === 'error')) {
+        showMessage('格式校验通过，但发现会影响规则生效的冲突。', true);
+      } else if (diagnostics.some((item) => item.severity === 'warning')) {
+        showMessage('格式校验通过，但存在需要确认的警告。', true);
+      } else if (diagnostics.length) {
+        showMessage('校验通过，并有诊断提示。');
+      } else {
+        showMessage('校验通过，未发现确定性冲突。');
+      }
     } catch (error) {
       showMessage(error.message, true);
     }
