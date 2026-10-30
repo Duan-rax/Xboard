@@ -34,6 +34,29 @@
 控制面 WebSocket。用户名和密码不会回显到浏览器：留空表示保留原值，
 勾选“清除”才会删除已保存的凭据。
 
+## 前端接入边界
+
+出站管理使用与路由管理相同的薄适配层和模块边界：
+
+```text
+Xboard 官方管理 SPA
+        ↓
+egress-admin-adapter.js
+        ↓
+egress-admin.js（controller）
+        ├── egress-admin-state.js
+        ├── egress-admin-form.js
+        ├── egress-admin-view.js
+        └── egress-admin-api.js
+```
+
+官方侧栏克隆、菜单选中态、MutationObserver、历史导航、滚动容器、页面挂载、
+登录令牌和请求鉴权都集中在适配器。控制器只编排保存、真实代理测试、节点绑定、
+解绑、分页和配置确认流程。
+
+业务模块不直接访问 `document`、`window` 或 `localStorage`，因此官方 SPA
+更新页面结构时只需调整适配器。
+
 ## 支持的出站类型
 
 | 类型 | 必填项 | 高级 JSON |

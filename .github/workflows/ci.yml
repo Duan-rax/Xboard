@@ -57,6 +57,11 @@ jobs:
 
       - name: Check JavaScript extension
         run: |
+          node --check public/assets/egress-admin-adapter.js
+          node --check public/assets/egress-admin-state.js
+          node --check public/assets/egress-admin-form.js
+          node --check public/assets/egress-admin-view.js
+          node --check public/assets/egress-admin-api.js
           node --check public/assets/egress-admin.js
           node tests/js/egress-menu.test.js
           node --check public/assets/route-admin-adapter.js

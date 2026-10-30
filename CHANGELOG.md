@@ -10,6 +10,9 @@ Release dates use the `Asia/Singapore` timezone.
 - Split the route controller into state, form, diagnostics, view and API
   modules. The top-level controller is reduced from 867 to about 350 lines and
   keeps only event orchestration and API workflows.
+- Migrate egress management to the same adapter/module boundary. The 1,000+
+  line runtime file is split into adapter, state, form, view, API and a narrow
+  controller while preserving embedded-menu, pagination and scroll behavior.
 
 ## 2026.10.30.8
 

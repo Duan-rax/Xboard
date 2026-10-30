@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 
 const createClassList = () => ({
   values: new Set(),
@@ -204,9 +205,19 @@ global.MutationObserver = class {
 };
 global.setTimeout = (callback) => { callback(); return 1; };
 
+require('../../public/assets/egress-admin-adapter.js');
+require('../../public/assets/egress-admin-state.js');
+require('../../public/assets/egress-admin-form.js');
+require('../../public/assets/egress-admin-view.js');
+require('../../public/assets/egress-admin-api.js');
 require('../../public/assets/egress-admin.js');
 
 assert.equal(installed, clonedItem, 'the leaf list item must be cloned');
+assert.equal(typeof globalThis.XboardEgressAdapter, 'object');
+assert.equal(typeof globalThis.XboardEgressAdmin.state, 'object');
+assert.equal(typeof globalThis.XboardEgressAdmin.form.read, 'function');
+assert.equal(typeof globalThis.XboardEgressAdmin.view.renderCatalog, 'function');
+assert.equal(typeof globalThis.XboardEgressAdmin.api.fetch, 'function');
 assert.equal(installed.id, 'xboard-egress-management-menu');
 assert.equal(clonedAnchor.href, '#');
 assert.equal(clonedLabel.nodeValue, '出站管理');
@@ -282,6 +293,13 @@ assert.equal(routeContent.style.display, 'none');
   assert.equal(routeAnchor['aria-current'], 'page');
   assert.match(routeAnchor.className, /bg-secondary/);
 
+  const controllerSource = fs.readFileSync('public/assets/egress-admin.js', 'utf8');
+  assert.doesNotMatch(controllerSource, /\bdocument\b|\bwindow\b|localStorage|(?<![.\w])fetch\(/);
+  assert.ok(controllerSource.split('\n').length < 600, 'egress controller should stay a thin orchestrator');
+  for (const moduleName of ['state', 'form', 'view', 'api']) {
+    const moduleSource = fs.readFileSync(`public/assets/egress-admin-${moduleName}.js`, 'utf8');
+    assert.doesNotMatch(moduleSource, /\bdocument\b|\bwindow\b|localStorage|(?<![.\w])fetch\(/, moduleName);
+  }
   console.log('egress menu, embedded page, and catalog test passed');
 }
 

@@ -81,6 +81,11 @@
 
 <body>
   <div id="root"></div>
+  <script src="/assets/egress-admin-adapter.js?v={{ substr(md5_file(public_path('assets/egress-admin-adapter.js')), 0, 12) }}" defer></script>
+  <script src="/assets/egress-admin-state.js?v={{ substr(md5_file(public_path('assets/egress-admin-state.js')), 0, 12) }}" defer></script>
+  <script src="/assets/egress-admin-form.js?v={{ substr(md5_file(public_path('assets/egress-admin-form.js')), 0, 12) }}" defer></script>
+  <script src="/assets/egress-admin-view.js?v={{ substr(md5_file(public_path('assets/egress-admin-view.js')), 0, 12) }}" defer></script>
+  <script src="/assets/egress-admin-api.js?v={{ substr(md5_file(public_path('assets/egress-admin-api.js')), 0, 12) }}" defer></script>
   <script src="/assets/egress-admin.js?v={{ substr(md5_file(public_path('assets/egress-admin.js')), 0, 12) }}" defer></script>
   <script src="/assets/route-admin-adapter.js?v={{ substr(md5_file(public_path('assets/route-admin-adapter.js')), 0, 12) }}" defer></script>
   <script src="/assets/route-admin-state.js?v={{ substr(md5_file(public_path('assets/route-admin-state.js')), 0, 12) }}" defer></script>
