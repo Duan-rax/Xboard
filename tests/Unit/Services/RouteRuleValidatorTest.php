@@ -22,7 +22,7 @@ class RouteRuleValidatorTest extends TestCase
 
         $this->assertSame(['api.example.com'], $criteria['domains']);
         $this->assertSame(['openai.com'], $criteria['domain_suffixes']);
-        $this->assertSame(['1.1.1.1/24', '2001:db8::/32'], $criteria['ip_cidrs']);
+        $this->assertSame(['1.1.1.0/24', '2001:db8::/32'], $criteria['ip_cidrs']);
         $this->assertSame(['443', '8000-8010'], $criteria['ports']);
         $this->assertSame(['tcp'], $criteria['networks']);
         $this->assertTrue(RouteRuleValidator::hasCriteria($criteria));
@@ -57,5 +57,30 @@ class RouteRuleValidatorTest extends TestCase
             'proxy',
             null
         );
+    }
+
+    public function test_normalizes_host_bits_and_idn_domains(): void
+    {
+        $criteria = RouteRuleValidator::normalizeCriteria([
+            'domains' => ['例子.测试'],
+            'ip_cidrs' => ['10.1.2.3/8', '2001:db8:1234::1/48'],
+        ]);
+
+        if (function_exists('idn_to_ascii')) {
+            $this->assertSame(['xn--fsqu00a.xn--0zwm56d'], $criteria['domains']);
+        }
+        $this->assertSame(['10.0.0.0/8', '2001:db8:1234::/48'], $criteria['ip_cidrs']);
+    }
+
+    public function test_counts_expanded_rules_for_any_and_all(): void
+    {
+        $criteria = RouteRuleValidator::normalizeCriteria([
+            'domains' => ['example.com'],
+            'ports' => ['443'],
+            'networks' => ['tcp'],
+        ]);
+
+        $this->assertSame(3, RouteRuleValidator::expandedRuleCount($criteria, 'any'));
+        $this->assertSame(1, RouteRuleValidator::expandedRuleCount($criteria, 'all'));
     }
 }

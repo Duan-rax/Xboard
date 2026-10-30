@@ -34,6 +34,7 @@ class NodeEventHandlers
         if (array_key_exists('egress_proxy_id', $data)) {
             Cache::put("node_config_applied:{$nodeId}", [
                 'egress_proxy_id' => (int) $data['egress_proxy_id'],
+                'config_revision' => (int) ($data['config_revision'] ?? 0),
                 'config_hash' => (string) ($data['config_hash'] ?? ''),
                 'applied_at' => (int) ($data['config_applied_at'] ?? time()),
             ], 86400);

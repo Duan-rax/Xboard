@@ -22,6 +22,10 @@ Release: `v2026.10.30.4`
 - Backward-compatible route schema migration; existing `match` rules continue
   to work without data conversion.
 - Sing-box and Xray priority-aware structured route compilation.
+- Monotonic node `config_revision` and canonical SHA-256 `config_hash`
+  acknowledgement for genuine applied-config verification.
+- CIDR network normalization, compressed IPv6 output and IDN/Punycode domain
+  normalization for stable rule hashes.
 
 ## 2026.10.30.2
 

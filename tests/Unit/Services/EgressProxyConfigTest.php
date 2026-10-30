@@ -66,4 +66,28 @@ class EgressProxyConfigTest extends TestCase
 
         $this->assertArrayNotHasKey('egress_proxy', ServerService::buildNodeConfig($server));
     }
+
+    public function test_node_config_fingerprint_is_stable_and_tracks_revision(): void
+    {
+        $server = new Server();
+        $server->forceFill([
+            'type' => Server::TYPE_HTTP,
+            'host' => 'entry.example.test',
+            'port' => 443,
+            'server_port' => 443,
+            'protocol_settings' => [],
+            'config_revision' => 108,
+        ]);
+
+        $first = ServerService::buildNodeConfig($server);
+        $second = ServerService::buildNodeConfig($server);
+
+        $this->assertSame(108, $first['config_revision']);
+        $this->assertSame(64, strlen($first['config_hash']));
+        $this->assertSame($first['config_hash'], $second['config_hash']);
+
+        $server->server_port = 8443;
+        $third = ServerService::buildNodeConfig($server);
+        $this->assertNotSame($first['config_hash'], $third['config_hash']);
+    }
 }

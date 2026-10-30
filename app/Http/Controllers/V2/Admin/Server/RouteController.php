@@ -8,7 +8,9 @@ use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Models\ServerRoute;
 use App\Services\RouteRuleValidator;
+use App\Services\ServerService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -58,7 +60,8 @@ class RouteController extends Controller
             $params['criteria'],
             $params['match'],
             $params['action'],
-            $params['action_value'] ?? null
+            $params['action_value'] ?? null,
+            $params['match_mode'] ?? 'any'
         );
         $params['match_mode'] = $params['match_mode'] ?? 'any';
         $params['priority'] = (int) ($params['priority'] ?? 100);
@@ -134,16 +137,63 @@ class RouteController extends Controller
         ]);
         $legacyMatch = array_values(array_filter($params['match'] ?? []));
         $criteria = RouteRuleValidator::normalizeCriteria($params['criteria'] ?? []);
-        RouteRuleValidator::assertUsable($criteria, $legacyMatch, $params['action'], $params['action_value'] ?? null);
+        $mode = $params['match_mode'] ?? 'any';
+        RouteRuleValidator::assertUsable(
+            $criteria,
+            $legacyMatch,
+            $params['action'],
+            $params['action_value'] ?? null,
+            $mode
+        );
         return $this->success([
             'criteria' => $criteria,
             'legacy_match' => $legacyMatch,
-            'match_mode' => $params['match_mode'] ?? 'any',
+            'match_mode' => $mode,
             'action' => $params['action'],
             'target' => $params['action_value'] ?? null,
+            'expanded_rule_count' => RouteRuleValidator::expandedRuleCount($criteria, $mode),
+            'estimated_bytes' => strlen(json_encode($criteria, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)),
             'warnings' => RouteRuleValidator::hasCriteria($criteria) ? [] : [
                 '该规则将继续使用旧版匹配格式。',
             ],
+        ]);
+    }
+
+    public function syncStatus(Request $request)
+    {
+        $routeId = (int) $request->validate([
+            'route_id' => 'required|integer|min:1',
+        ])['route_id'];
+        ServerRoute::findOrFail($routeId);
+
+        $servers = Server::query()->where('show', 1)->get()->filter(
+            fn (Server $server) => in_array($routeId, $server->route_ids ?? [])
+        );
+        $statuses = $servers->map(function (Server $server) {
+            $expected = ServerService::buildNodeConfig($server);
+            $applied = Cache::get("node_config_applied:{$server->id}");
+            $confirmed = is_array($applied)
+                && (int) ($applied['config_revision'] ?? -1) >= (int) $expected['config_revision']
+                && hash_equals(
+                    (string) $expected['config_hash'],
+                    (string) ($applied['config_hash'] ?? '')
+                );
+            return [
+                'server_id' => (int) $server->id,
+                'server_name' => $server->name,
+                'expected_revision' => (int) $expected['config_revision'],
+                'expected_hash' => $expected['config_hash'],
+                'applied_revision' => (int) ($applied['config_revision'] ?? 0),
+                'applied_hash' => (string) ($applied['config_hash'] ?? ''),
+                'applied_at' => (int) ($applied['applied_at'] ?? 0),
+                'confirmed' => $confirmed,
+            ];
+        })->values();
+
+        return $this->success([
+            'nodes' => $statuses,
+            'confirmed' => $statuses->where('confirmed', true)->count(),
+            'pending' => $statuses->where('confirmed', false)->count(),
         ]);
     }
 

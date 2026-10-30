@@ -478,16 +478,35 @@
     showMessage('正在保存…');
     try {
       const body = readForm();
-      await api('/save', 'POST', body);
-      showMessage('规则已保存，绑定节点将热重载路由。');
+      const saved = await api('/save', 'POST', body);
+      showMessage('规则已保存，正在等待绑定节点确认配置版本…');
       await load();
       resetForm();
-      showMessage('规则已保存，绑定节点将热重载路由。');
+      showMessage('规则已保存，正在等待绑定节点确认配置版本…');
+      if (saved?.id) void pollSync(saved.id);
     } catch (error) {
       showMessage(error.message, true);
     } finally {
       button.disabled = false;
     }
+  };
+
+  const pollSync = async (routeId) => {
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      if (!page()) return;
+      try {
+        const status = await api('/sync-status', 'POST', { route_id: Number(routeId) });
+        if (Number(status?.pending || 0) === 0) {
+          showMessage(`节点配置已全部确认：revision/hash 一致（${Number(status?.confirmed || 0)} 台）。`);
+          return;
+        }
+        showMessage(`等待节点应用：${Number(status?.confirmed || 0)} 台已确认，${Number(status.pending)} 台待更新。`);
+      } catch (error) {
+        if (attempt === 8) showMessage(error.message, true);
+      }
+    }
+    showMessage('仍有节点未确认 revision/hash，请检查节点版本和连接状态。', true);
   };
 
   const preview = async () => {

@@ -7,6 +7,7 @@ use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Services\EgressProxyValidator;
 use App\Services\NodeSyncService;
+use App\Services\ServerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -282,6 +283,7 @@ class EgressProxyController extends Controller
             }
         });
         $requestedAt = time();
+        ServerService::bumpConfigRevision($changedIds->all());
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
@@ -332,6 +334,7 @@ class EgressProxyController extends Controller
             }
         });
         $requestedAt = time();
+        ServerService::bumpConfigRevision($changedIds->all());
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
@@ -403,9 +406,11 @@ class EgressProxyController extends Controller
 
     private function syncBoundNodes(EgressProxy $proxy): void
     {
-        $this->notifyNodeConfigs(
-            Server::query()->where('egress_proxy_id', $proxy->id)->pluck('id')
-        );
+        $serverIds = Server::query()
+            ->where('egress_proxy_id', $proxy->id)
+            ->pluck('id');
+        ServerService::bumpConfigRevision($serverIds->all());
+        $this->notifyNodeConfigs($serverIds);
     }
 
     private function notifyNodeConfigs(iterable $serverIds): void

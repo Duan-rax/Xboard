@@ -6,6 +6,10 @@ use Illuminate\Validation\ValidationException;
 
 class RouteRuleValidator
 {
+    public const MAX_VALUES_PER_FIELD = 1000;
+    public const MAX_TOTAL_VALUES = 2000;
+    public const MAX_EXPANDED_RULES = 200;
+
     public const CRITERIA_KEYS = [
         'domains',
         'domain_suffixes',
@@ -90,7 +94,13 @@ class RouteRuleValidator
         return self::normalizeCriteria($criteria);
     }
 
-    public static function assertUsable(?array $criteria, array $legacyMatch, string $action, ?string $target): void
+    public static function assertUsable(
+        ?array $criteria,
+        array $legacyMatch,
+        string $action,
+        ?string $target,
+        string $matchMode = 'any'
+    ): void
     {
         if ($action === 'proxy' && !$target) {
             throw ValidationException::withMessages([
@@ -102,6 +112,40 @@ class RouteRuleValidator
                 'criteria' => ['至少填写一个匹配条件。'],
             ]);
         }
+        $total = 0;
+        foreach (self::CRITERIA_KEYS as $key) {
+            $count = count($criteria[$key] ?? []);
+            if ($count > self::MAX_VALUES_PER_FIELD) {
+                throw ValidationException::withMessages([
+                    'criteria' => ["字段 {$key} 最多允许 " . self::MAX_VALUES_PER_FIELD . ' 个值。'],
+                ]);
+            }
+            $total += $count;
+        }
+        if ($total > self::MAX_TOTAL_VALUES) {
+            throw ValidationException::withMessages([
+                'criteria' => ['单条规则匹配值总数不能超过 ' . self::MAX_TOTAL_VALUES . '。'],
+            ]);
+        }
+        if (self::expandedRuleCount($criteria, $matchMode) > self::MAX_EXPANDED_RULES) {
+            throw ValidationException::withMessages([
+                'criteria' => ['规则展开后将超过 ' . self::MAX_EXPANDED_RULES . ' 条内核规则。'],
+            ]);
+        }
+    }
+
+    public static function expandedRuleCount(?array $criteria, string $matchMode): int
+    {
+        if (!self::hasCriteria($criteria)) {
+            return 0;
+        }
+        if ($matchMode === 'all') {
+            return 1;
+        }
+        return count(array_filter(
+            self::CRITERIA_KEYS,
+            fn ($key) => !empty($criteria[$key])
+        ));
     }
 
     private static function normalizeValues(mixed $values): array
@@ -120,9 +164,16 @@ class RouteRuleValidator
 
     private static function normalizeDomain(string $value): string
     {
-        $value = strtolower(trim($value));
+        $value = trim($value);
         $value = preg_replace('#^[a-z]+://#i', '', $value);
         $value = rtrim((string) $value, '.');
+        if (preg_match('/[^\x00-\x7F]/', $value) === 1 && function_exists('idn_to_ascii')) {
+            $ascii = idn_to_ascii($value, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+            if ($ascii !== false) {
+                $value = $ascii;
+            }
+        }
+        $value = strtolower($value);
         if ($value === '' || str_contains($value, '/') || preg_match('/\s/', $value)) {
             throw ValidationException::withMessages([
                 'criteria' => ["域名格式不正确：{$value}"],
@@ -147,7 +198,20 @@ class RouteRuleValidator
                 'criteria' => ["CIDR 前缀格式不正确：{$value}"],
             ]);
         }
-        return $prefix === null ? $ip : "{$ip}/{$prefix}";
+        if ($prefix === null) {
+            return inet_ntop($packed);
+        }
+        $bits = (int) $prefix;
+        $bytes = strlen($packed);
+        for ($index = 0; $index < $bytes; $index += 1) {
+            $remaining = $bits - ($index * 8);
+            if ($remaining <= 0) {
+                $packed[$index] = "\0";
+            } elseif ($remaining < 8) {
+                $packed[$index] = chr(ord($packed[$index]) & (0xff << (8 - $remaining)));
+            }
+        }
+        return inet_ntop($packed) . "/{$bits}";
     }
 
     private static function normalizePortSpec(string $value, string $label): string

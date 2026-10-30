@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Server;
 use App\Services\NodeSyncService;
+use App\Services\ServerService;
 
 class ServerObserver
 {
@@ -16,9 +17,7 @@ class ServerObserver
 
     public function updated(Server $server): void
     {
-        if ($server->wasChanged('group_ids')) {
-            NodeSyncService::notifyFullSync($server->id);
-        } elseif ($server->wasChanged([
+        $configChanged = $server->wasChanged([
             'server_port',
             'protocol_settings',
             'type',
@@ -27,7 +26,15 @@ class ServerObserver
             'custom_routes',
             'cert_config',
             'egress_proxy_id',
-        ])) {
+        ]);
+        if ($configChanged && !$server->wasChanged('config_revision')) {
+            ServerService::bumpConfigRevision([$server->id]);
+            $server->config_revision = ((int) $server->config_revision) + 1;
+        }
+
+        if ($server->wasChanged('group_ids')) {
+            NodeSyncService::notifyFullSync($server->id);
+        } elseif ($configChanged) {
             NodeSyncService::notifyConfigUpdated($server->id);
         }
 

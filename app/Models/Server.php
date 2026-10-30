@@ -135,6 +135,7 @@ class Server extends Model
         'd' => 'integer',
         'machine_id' => 'integer',
         'egress_proxy_id' => 'integer',
+        'config_revision' => 'integer',
     ];
 
     private const MULTIPLEX_CONFIGURATION = [

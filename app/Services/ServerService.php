@@ -429,7 +429,39 @@ class ServerService
             }
         }
 
+        $revision = max(0, (int) ($node->config_revision ?? 0));
+        $hashPayload = self::canonicalConfigValue($response);
+        $response['config_revision'] = $revision;
+        $response['config_hash'] = hash(
+            'sha256',
+            json_encode($hashPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+        $response['config_generated_at'] = now()->timestamp;
+
         return $response;
+    }
+
+    public static function bumpConfigRevision(array $serverIds): void
+    {
+        $serverIds = array_values(array_unique(array_filter(array_map('intval', $serverIds))));
+        if (empty($serverIds)) {
+            return;
+        }
+        Server::query()->whereIn('id', $serverIds)->increment('config_revision');
+    }
+
+    private static function canonicalConfigValue(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+        if (!array_is_list($value)) {
+            ksort($value);
+        }
+        foreach ($value as $key => $item) {
+            $value[$key] = self::canonicalConfigValue($item);
+        }
+        return $value;
     }
 
     /**

@@ -46,7 +46,11 @@ jobs:
           php -l app/Services/RouteRuleValidator.php
           php -l database/migrations/2026_10_29_000001_create_egress_proxy_table.php
           php -l database/migrations/2026_10_30_000001_add_structured_fields_to_v2_server_route_table.php
+          php -l database/migrations/2026_10_30_000002_add_config_revision_to_v2_server_table.php
           php -l app/Services/ServerService.php
+          php -l app/Observers/ServerObserver.php
+          php -l app/Observers/ServerRouteObserver.php
+          php -l app/WebSocket/NodeEventHandlers.php
           php -l app/Http/Controllers/V2/Admin/Server/RouteController.php
           php -l app/Http/Routes/V2/AdminRoute.php
 

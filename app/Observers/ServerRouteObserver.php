@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Server;
 use App\Models\ServerRoute;
 use App\Services\NodeSyncService;
+use App\Services\ServerService;
 
 class ServerRouteObserver
 {
@@ -22,6 +23,9 @@ class ServerRouteObserver
     {
         $servers = Server::where('show', 1)->get()->filter(
             fn ($s) => in_array($routeId, $s->route_ids ?? [])
+        );
+        ServerService::bumpConfigRevision(
+            $servers->pluck('id')->map(fn ($id) => (int) $id)->all()
         );
 
         foreach ($servers as $server) {
