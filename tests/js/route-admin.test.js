@@ -33,6 +33,7 @@ let inserted = false;
 let style = null;
 let documentClickHandler = null;
 let routeMutationCallback = null;
+let routeObserverDisconnected = false;
 
 const page = createElement();
 page.remove = () => { inserted = false; };
@@ -150,6 +151,7 @@ global.document = {
 global.MutationObserver = class {
   constructor(callback) { routeMutationCallback = callback; }
   observe() {}
+  disconnect() { routeObserverDisconnected = true; }
 };
 
 require('../../public/assets/route-admin-adapter.js');
@@ -226,6 +228,7 @@ async function verify() {
   routeMutationCallback();
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(inserted, true, 'SPA DOM updates must reopen a direct route refresh');
+  assert.equal(routeObserverDisconnected, true, 'startup observer must stop after a successful mount');
 
   const routeSource = fs.readFileSync('public/assets/route-admin.js', 'utf8');
   assert.doesNotMatch(routeSource, /\bdocument\b|\bwindow\b|localStorage/);

@@ -197,12 +197,17 @@
 
   const bindNavigation = ({ onRoute, onClose, onResume }) => {
     let resumeQueued = false;
+    let startupObserver = null;
     const resumeWhenReady = () => {
       if (resumeQueued) return;
       resumeQueued = true;
       setTimeout(() => {
         resumeQueued = false;
         onResume();
+        if (page() && startupObserver) {
+          startupObserver.disconnect();
+          startupObserver = null;
+        }
       }, 0);
     };
 
@@ -223,7 +228,8 @@
     window.addEventListener('hashchange', onClose);
     window.addEventListener('popstate', () => setTimeout(resumeWhenReady, 50));
     document.addEventListener?.('DOMContentLoaded', () => setTimeout(resumeWhenReady, 100));
-    new MutationObserver(resumeWhenReady).observe(document.documentElement, {
+    startupObserver = new MutationObserver(resumeWhenReady);
+    startupObserver.observe(document.documentElement, {
       childList: true,
       subtree: true,
     });
