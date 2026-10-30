@@ -142,6 +142,13 @@ class RouteRuleValidator
         if (!is_array($values)) {
             return [];
         }
+        foreach ($values as $value) {
+            if (!is_string($value) && !is_int($value) && !is_float($value)) {
+                throw ValidationException::withMessages([
+                    'criteria' => ['匹配条件必须是字符串或数字，不能使用嵌套对象。'],
+                ]);
+            }
+        }
         return array_values(array_filter(array_map(
             fn ($value) => trim((string) $value),
             $values
