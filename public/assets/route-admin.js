@@ -184,6 +184,16 @@
             <textarea id="xe-domains" placeholder="example.com&#10;api.example.net"></textarea>
             <label for="xe-domain-suffixes">域名后缀</label>
             <textarea id="xe-domain-suffixes" placeholder="google.com&#10;openai.com"></textarea>
+            <div class="xe-grid">
+              <div>
+                <label for="xe-domain-keywords">域名关键字</label>
+                <textarea id="xe-domain-keywords" placeholder="tracker&#10;announce"></textarea>
+              </div>
+              <div>
+                <label for="xe-domain-regexes">域名正则（双内核）</label>
+                <textarea id="xe-domain-regexes" placeholder="(^|\\.)example[0-9]+\\.com$"></textarea>
+              </div>
+            </div>
             <label for="xe-ip-cidrs">IP / CIDR</label>
             <textarea id="xe-ip-cidrs" placeholder="1.1.1.0/24&#10;2001:db8::/32"></textarea>
             <div class="xe-grid">
@@ -196,6 +206,8 @@
                 <textarea id="xe-networks" placeholder="tcp&#10;udp"></textarea>
               </div>
             </div>
+            <label for="xe-protocols">嗅探协议（双内核）</label>
+            <textarea id="xe-protocols" placeholder="bittorrent&#10;http&#10;tls&#10;quic"></textarea>
             <div class="xe-grid">
               <div>
                 <label for="xe-source-cidrs">来源 IP / CIDR</label>
@@ -220,7 +232,8 @@
                 <textarea id="xe-rule-sets" placeholder="cn_ip"></textarea>
               </div>
             </div>
-            <p class="xe-help">GeoIP/GeoSite 会自动适配：Xray 使用 geoip/geosite 数据库，sing-box 使用并缓存远程 SRS。自定义 Rule Set Tag 必须已在 sing-box custom_config 的 route.rule_set 中定义，不能绑定 Xray 节点。</p>
+            <p class="xe-help">GeoIP/GeoSite 会自动适配：Xray 使用 geoip/geosite 数据库；sing-box 不生成已弃用的 geoip/geosite 字段，而是使用并缓存远程 SRS。自定义 Rule Set Tag 必须已在 sing-box custom_config 的 route.rule_set 中定义，不能绑定 Xray 节点。</p>
+            <p class="xe-help">选择 bittorrent 等嗅探协议，或使用域名类条件时，节点会自动开启必要的流量嗅探。加密或混淆后的 BT 仍可能无法识别。</p>
             <p class="xe-help">“全部条件”会生成一个同时满足多类条件的规则；“任一条件”会拆成多条 OR 规则。</p>
             <h3>动作</h3>
             <div class="xe-grid">
@@ -335,11 +348,14 @@
   const emptyCriteria = () => ({
     domains: [],
     domain_suffixes: [],
+    domain_keywords: [],
+    domain_regexes: [],
     ip_cidrs: [],
     ports: [],
     networks: [],
     source_cidrs: [],
     source_ports: [],
+    protocols: [],
     geoip: [],
     geosite: [],
     rule_sets: [],
@@ -365,11 +381,14 @@
     const map = {
       domains: 'xe-domains',
       domain_suffixes: 'xe-domain-suffixes',
+      domain_keywords: 'xe-domain-keywords',
+      domain_regexes: 'xe-domain-regexes',
       ip_cidrs: 'xe-ip-cidrs',
       ports: 'xe-ports',
       networks: 'xe-networks',
       source_cidrs: 'xe-source-cidrs',
       source_ports: 'xe-source-ports',
+      protocols: 'xe-protocols',
       geoip: 'xe-geoip',
       geosite: 'xe-geosite',
       rule_sets: 'xe-rule-sets',
@@ -430,11 +449,14 @@
     criteria: {
       domains: lines('xe-domains'),
       domain_suffixes: lines('xe-domain-suffixes'),
+      domain_keywords: lines('xe-domain-keywords'),
+      domain_regexes: lines('xe-domain-regexes'),
       ip_cidrs: lines('xe-ip-cidrs'),
       ports: lines('xe-ports'),
       networks: lines('xe-networks'),
       source_cidrs: lines('xe-source-cidrs'),
       source_ports: lines('xe-source-ports'),
+      protocols: lines('xe-protocols'),
       geoip: lines('xe-geoip'),
       geosite: lines('xe-geosite'),
       rule_sets: lines('xe-rule-sets'),
@@ -460,11 +482,14 @@
     const parts = [];
     if (criteria.domains?.length) parts.push(`域名 ${criteria.domains.length}`);
     if (criteria.domain_suffixes?.length) parts.push(`后缀 ${criteria.domain_suffixes.length}`);
+    if (criteria.domain_keywords?.length) parts.push(`关键字 ${criteria.domain_keywords.length}`);
+    if (criteria.domain_regexes?.length) parts.push(`正则 ${criteria.domain_regexes.length}`);
     if (criteria.ip_cidrs?.length) parts.push(`IP ${criteria.ip_cidrs.length}`);
     if (criteria.ports?.length) parts.push(`端口 ${criteria.ports.length}`);
     if (criteria.networks?.length) parts.push(`网络 ${criteria.networks.join('/')}`);
     if (criteria.source_cidrs?.length) parts.push(`来源IP ${criteria.source_cidrs.length}`);
     if (criteria.source_ports?.length) parts.push(`来源端口 ${criteria.source_ports.length}`);
+    if (criteria.protocols?.length) parts.push(`协议 ${criteria.protocols.join('/')}`);
     if (criteria.geoip?.length) parts.push(`GeoIP ${criteria.geoip.join(',')}`);
     if (criteria.geosite?.length) parts.push(`GeoSite ${criteria.geosite.join(',')}`);
     if (criteria.rule_sets?.length) parts.push(`sing-box 集合 ${criteria.rule_sets.join(',')}`);

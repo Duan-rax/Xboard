@@ -9,11 +9,14 @@ class RouteRuleValidator
     public const CRITERIA_KEYS = [
         'domains',
         'domain_suffixes',
+        'domain_keywords',
+        'domain_regexes',
         'ip_cidrs',
         'ports',
         'networks',
         'source_cidrs',
         'source_ports',
+        'protocols',
         'geoip',
         'geosite',
         'rule_sets',
@@ -34,6 +37,14 @@ class RouteRuleValidator
             fn ($value) => ltrim(self::normalizeDomain($value), '*.'),
             $criteria['domain_suffixes']
         );
+        $criteria['domain_keywords'] = array_map(
+            fn ($value) => self::normalizeDomainKeyword($value),
+            $criteria['domain_keywords']
+        );
+        $criteria['domain_regexes'] = array_map(
+            fn ($value) => self::normalizeDomainRegex($value),
+            $criteria['domain_regexes']
+        );
         $criteria['ip_cidrs'] = array_map(
             fn ($value) => self::normalizeCidr($value),
             $criteria['ip_cidrs']
@@ -53,6 +64,10 @@ class RouteRuleValidator
         $criteria['networks'] = array_map(
             fn ($value) => self::normalizeNetwork($value),
             $criteria['networks']
+        );
+        $criteria['protocols'] = array_map(
+            fn ($value) => self::normalizeProtocol($value),
+            $criteria['protocols']
         );
         $criteria['geoip'] = array_map(
             fn ($value) => self::normalizeGeoCode($value, 'geoip'),
@@ -165,6 +180,37 @@ class RouteRuleValidator
         return $prefix === null ? $ip : "{$ip}/{$prefix}";
     }
 
+    private static function normalizeDomainKeyword(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if ($value === '' || strlen($value) > 255 || preg_match('/[\x00-\x1F\x7F]/', $value)) {
+            throw ValidationException::withMessages([
+                'criteria' => ["域名关键字格式不正确：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
+    private static function normalizeDomainRegex(string $value): string
+    {
+        $value = trim($value);
+        // Both kernels use Go's RE2-compatible regular expressions. Reject
+        // backtracking-only PCRE constructs that would fail when the node
+        // compiles the rule.
+        $unsupported = preg_match(
+            '/\(\?(?:[=!]|<[=!]|[|#>(])|\(\*|\\\\[1-9kKgG]|(?:[*+?]|\{\d+(?:,\d*)?\})\+/',
+            $value
+        );
+        $pattern = '~' . str_replace('~', '\\~', $value) . '~u';
+        if ($value === '' || strlen($value) > 512 || preg_match('/[\x00-\x1F\x7F]/', $value)
+            || $unsupported || @preg_match($pattern, '') === false) {
+            throw ValidationException::withMessages([
+                'criteria' => ["域名正则格式不正确：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
     private static function normalizePortSpec(string $value, string $label): string
     {
         $value = str_replace(':', '-', trim($value));
@@ -192,6 +238,17 @@ class RouteRuleValidator
         if (!in_array($value, ['tcp', 'udp'], true)) {
             throw ValidationException::withMessages([
                 'criteria' => ["网络类型只支持 tcp 或 udp：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
+    private static function normalizeProtocol(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if (!in_array($value, ['http', 'tls', 'quic', 'bittorrent'], true)) {
+            throw ValidationException::withMessages([
+                'criteria' => ["嗅探协议只支持 http、tls、quic 或 bittorrent：{$value}"],
             ]);
         }
         return $value;
