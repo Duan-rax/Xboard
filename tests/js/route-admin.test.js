@@ -32,6 +32,7 @@ const createElement = (extra = {}) => ({
 let inserted = false;
 let style = null;
 let documentClickHandler = null;
+let routeMutationCallback = null;
 
 const page = createElement();
 page.remove = () => { inserted = false; };
@@ -129,6 +130,7 @@ global.fetch = async (url, options = {}) => {
   };
 };
 global.document = {
+  documentElement: createElement(),
   head: { appendChild: (element) => { style = element; } },
   createElement: () => createElement(),
   getElementById(id) {
@@ -144,6 +146,10 @@ global.document = {
   addEventListener(name, listener) {
     if (name === 'click') documentClickHandler = listener;
   },
+};
+global.MutationObserver = class {
+  constructor(callback) { routeMutationCallback = callback; }
+  observe() {}
 };
 
 require('../../public/assets/route-admin-adapter.js');
@@ -214,6 +220,12 @@ async function verify() {
   assert.equal(inserted, true, 'popstate must reopen the page on the route URL');
   windowListeners.hashchange();
   assert.equal(inserted, false, 'hash navigation must close the embedded page');
+
+  window.location.pathname = '/server/route';
+  window.location.href = 'https://panel.test/server/route';
+  routeMutationCallback();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(inserted, true, 'SPA DOM updates must reopen a direct route refresh');
 
   const routeSource = fs.readFileSync('public/assets/route-admin.js', 'utf8');
   assert.doesNotMatch(routeSource, /\bdocument\b|\bwindow\b|localStorage/);

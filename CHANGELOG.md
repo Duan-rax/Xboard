@@ -54,6 +54,9 @@ Release: `v2026.10.30.4`
 
 ### Fixed
 
+- Retry structured-route mounting when the official SPA renders its content
+  host after initial load, preventing a direct refresh from leaving the old
+  native route table visible.
 - `all` rules keep their AND relationship across domain, IP and port groups
   instead of accidentally matching a substring.
 - Custom sing-box rule-set and experimental settings merge without losing the

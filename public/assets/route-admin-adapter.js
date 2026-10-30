@@ -196,6 +196,16 @@
   };
 
   const bindNavigation = ({ onRoute, onClose, onResume }) => {
+    let resumeQueued = false;
+    const resumeWhenReady = () => {
+      if (resumeQueued) return;
+      resumeQueued = true;
+      setTimeout(() => {
+        resumeQueued = false;
+        onResume();
+      }, 0);
+    };
+
     document.addEventListener('click', (event) => {
       const link = event.target.closest?.('a[href]');
       if (!link) return;
@@ -211,9 +221,13 @@
     }, true);
 
     window.addEventListener('hashchange', onClose);
-    window.addEventListener('popstate', () => setTimeout(onResume, 50));
-    document.addEventListener?.('DOMContentLoaded', () => setTimeout(onResume, 100));
-    setTimeout(onResume, 1200);
+    window.addEventListener('popstate', () => setTimeout(resumeWhenReady, 50));
+    document.addEventListener?.('DOMContentLoaded', () => setTimeout(resumeWhenReady, 100));
+    new MutationObserver(resumeWhenReady).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+    setTimeout(resumeWhenReady, 1200);
   };
 
   globalThis.XboardRouteAdapter = Object.freeze({
