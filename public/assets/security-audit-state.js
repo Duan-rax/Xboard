@@ -2,6 +2,7 @@
   'use strict';
   const root = globalThis.XboardSecurityAudit = globalThis.XboardSecurityAudit || {};
   root.state = {
+    section: 'overview',
     range: '24h',
     loading: false,
     overview: null,

@@ -2,142 +2,275 @@
 
 const assert = require('node:assert/strict');
 
-const classList = () => ({
-  values: new Set(),
-  add(value) { this.values.add(value); },
-  remove(value) { this.values.delete(value); },
-  contains(value) { return this.values.has(value); },
-});
-const element = (extra = {}) => ({
-  value: '', checked: false, innerHTML: '', textContent: '', className: '',
-  style: { display: '' }, classList: classList(), listeners: {},
-  setAttribute(name, value) { this[name] = value; },
-  removeAttribute(name) { delete this[name]; },
-  addEventListener(name, listener) { this.listeners[name] = listener; },
-  querySelector() { return null; }, querySelectorAll() { return []; },
-  closest() { return null; }, ...extra,
-});
+const classList = (owner) => {
+  const values = new Set(String(owner.className || '').split(/\s+/).filter(Boolean));
+  return {
+    values,
+    add(value) { values.add(value); },
+    remove(value) { values.delete(value); },
+    contains(value) { return values.has(value); },
+    toggle(value, force) {
+      const enabled = force === undefined ? !values.has(value) : Boolean(force);
+      if (enabled) values.add(value);
+      else values.delete(value);
+      return enabled;
+    },
+  };
+};
+
+const element = (extra = {}) => {
+  const value = {
+    value: '', checked: false, innerHTML: '', textContent: '', className: '',
+    id: '', href: '', hidden: false, disabled: false, dataset: {}, parentElement: null,
+    children: [], style: { display: '' }, listeners: {}, attributes: {},
+    setAttribute(name, value) { this.attributes[name] = String(value); this[name] = String(value); },
+    removeAttribute(name) { delete this.attributes[name]; delete this[name]; },
+    addEventListener(name, listener) { this.listeners[name] = listener; },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    closest() { return null; },
+    matches() { return false; },
+    ...extra,
+  };
+  value.classList = classList(value);
+  return value;
+};
 
 let inserted = false;
 let menuInserted = false;
-let menu = null;
-let menuClick = null;
+let migrationCallback = null;
 let documentClick = null;
-let mutation = null;
-const page = element();
-page.remove = () => { inserted = false; };
-const content = element();
+let hashChange = null;
+const elements = new Map();
+const styles = new Map();
+const sectionLinks = [];
+
 const native = element();
-content.children = [native];
-content.insertAdjacentHTML = (_position, html) => {
-  if (html.includes('xboard-security-audit-page')) inserted = true;
-};
-const dashboard = element({
-  href: '#/dashboard',
-  textContent: '仪表盘',
-  getAttribute(name) { return name === 'href' ? this.href : this[name]; },
-  closest(selector) { return selector === 'li' ? dashboardItem : null; },
+const content = element({ children: [native] });
+const page = element({
+  remove() {
+    inserted = false;
+  },
 });
-const dashboardLink = element({
-  textContent: '仪表盘',
-  getAttribute(name) { return name === 'href' ? '#/dashboard' : this[name]; },
+const panels = ['overview', 'traffic', 'rules', 'users', 'settings'].map((name) => {
+  const panel = element({ hidden: name !== 'overview' });
+  panel.dataset.saPanel = name;
+  return panel;
 });
-dashboardLink.addEventListener = (name, listener) => {
-  if (name === 'click') menuClick = listener;
+const filterToolbar = element();
+
+page.querySelectorAll = (selector) => selector === '[data-sa-panel]' ? panels : [];
+page.querySelector = (selector) => selector === '[data-sa-filter-toolbar]' ? filterToolbar : null;
+content.insertAdjacentHTML = (_position, markup) => {
+  assert.match(markup, /id="xboard-security-audit-page"/);
+  assert.match(markup, /data-sa-panel="overview"/);
+  assert.match(markup, /data-sa-panel="traffic" hidden/);
+  assert.match(markup, /data-sa-panel="settings" hidden/);
+  inserted = true;
 };
+
+const idNames = [
+  'sa-range', 'sa-user-id', 'sa-node-id', 'sa-destination', 'sa-action', 'sa-message',
+  'sa-cards', 'sa-routes', 'sa-users', 'sa-destinations', 'sa-nodes', 'sa-events',
+  'sa-event-count', 'sa-page-info', 'sa-ingest-url', 'sa-secret', 'sa-retention',
+  'sa-settings-message', 'sa-section-title', 'sa-section-copy',
+];
+idNames.forEach((id) => elements.set(id, element({ id })));
+elements.get('sa-range').value = '24h';
+elements.get('sa-action').value = '';
+
+const list = element();
+const menu = element({
+  matches(selector) { return selector === 'a'; },
+});
+menu.querySelector = (selector) => {
+  if (selector === '.sa-nav-toggle') return menu._toggle;
+  if (selector === '.sa-nav-sub') return menu._submenu;
+  return null;
+};
+menu.querySelectorAll = (selector) => selector === '[data-sa-section]' ? sectionLinks : [];
+
+Object.defineProperty(menu, 'innerHTML', {
+  set(markup) {
+    this._html = markup;
+    const toggle = element({
+      className: 'sa-nav-toggle',
+      parentElement: menu,
+    });
+    toggle.closest = (selector) => selector === '[data-sa-toggle]' ? null : null;
+    const submenu = element({ className: 'sa-nav-sub', parentElement: menu });
+    submenu.querySelectorAll = (selector) => selector === '[data-sa-section]' ? sectionLinks : [];
+    sectionLinks.splice(0, sectionLinks.length);
+    for (const match of markup.matchAll(/<button type="button" data-sa-section="([^"]+)">([^<]+)<\/button>/g)) {
+      const link = element({
+        textContent: match[2],
+        parentElement: submenu,
+      });
+      link.dataset.saSection = match[1];
+      sectionLinks.push(link);
+    }
+    this._toggle = toggle;
+    this._submenu = submenu;
+  },
+  get() {
+    return this._html || '';
+  },
+});
+
 const dashboardItem = element({
-  textContent: '仪表盘',
-  cloneNode() { return menu; },
-  insertAdjacentElement(position, value) {
+  parentElement: list,
+  insertAdjacentElement(position, item) {
     assert.equal(position, 'afterend');
-    assert.equal(value, menu);
+    assert.equal(item, menu);
     menuInserted = true;
   },
 });
-menu = element({
-  childNodes: [{ nodeType: 3, nodeValue: '仪表盘' }],
-  matches(selector) { return selector === 'a'; },
-  querySelectorAll(selector) {
-    if (selector === '*') return [];
-    if (selector === 'div') return [element({ innerHTML: '' })];
-    return [];
-  },
+const dashboard = element({
+  className: 'official-nav-item',
+  href: '#/dashboard',
+  textContent: '仪表盘',
 });
-menu.addEventListener = dashboardLink.addEventListener;
+dashboard.attributes['aria-current'] = 'page';
+dashboard.getAttribute = (name) => name === 'href' ? '#/dashboard' : dashboard.attributes[name];
+dashboard.closest = (selector) => selector === 'li' ? dashboardItem : null;
 
-const ids = [
-  'sa-range', 'sa-user-id', 'sa-node-id', 'sa-destination', 'sa-action', 'sa-message',
-  'sa-cards', 'sa-routes', 'sa-users', 'sa-destinations', 'sa-nodes', 'sa-events',
-  'sa-page-info', 'sa-ingest-url', 'sa-secret', 'sa-retention', 'sa-settings-message',
-];
-const elements = new Map(ids.map((id) => [id, element()]));
-const style = element();
 global.window = {
   settings: { secure_path: 'test' },
-  addEventListener() {},
+  addEventListener(name, listener) {
+    if (name === 'hashchange') hashChange = listener;
+  },
 };
 global.localStorage = {
   length: 1,
   key: () => 'Xboard_access_token',
   getItem: (key) => key === 'Xboard_access_token' ? JSON.stringify({ value: 'token' }) : null,
 };
+const sessionValues = new Map();
+global.sessionStorage = {
+  getItem: (key) => sessionValues.get(key) || null,
+  setItem: (key, value) => sessionValues.set(key, String(value)),
+  removeItem: (key) => sessionValues.delete(key),
+};
+
 global.document = {
   documentElement: element(),
-  head: { appendChild(value) { style.id = value.id; style.textContent = value.textContent; } },
-  createElement: () => element(),
+  head: {
+    appendChild(style) {
+      styles.set(style.id, style);
+    },
+  },
+  createElement(tag) {
+    if (tag === 'li') return menu;
+    return element({ tag });
+  },
   getElementById(id) {
     if (id === 'xboard-security-audit-page') return inserted ? page : null;
-    if (id === 'xboard-security-audit-style') return style.id ? style : null;
     if (id === 'xboard-security-audit-menu') return menuInserted ? menu : null;
     if (id === 'content') return content;
+    if (styles.has(id)) return styles.get(id);
     return inserted ? (elements.get(id) || null) : null;
   },
   querySelectorAll(selector) {
     if (selector === 'a[href]' || selector === 'nav a[href]') return [dashboard];
     return [];
   },
-  addEventListener(name, listener) { if (name === 'click') documentClick = listener; },
+  addEventListener(name, listener) {
+    if (name === 'click') documentClick = listener;
+  },
 };
 global.MutationObserver = class {
-  constructor(callback) { mutation = callback; }
+  constructor(callback) { migrationCallback = callback; }
   observe() {}
 };
-global.sessionStorage = { value: null, getItem() { return this.value; }, setItem(_k, value) { this.value = value; }, removeItem() { this.value = null; } };
-global.fetch = async (url) => ({
-  ok: true,
-  status: 200,
-  json: async () => ({
-    status: 'success',
-    data: String(url).includes('/events?')
-      ? { data: [], current_page: 1, last_page: 1, total: 0 }
-      : String(url).includes('/settings')
-        ? { webhook_secret: 'secret', retention_days: 30, ingest_url: 'https://panel.test/api/v1/traffic-audit/events' }
-        : {
-            cards: { total_bytes: 0, upload_bytes: 0, download_bytes: 0, connections: 0, blocked_events: 0 },
-            routes: [], users: [], destinations: [], nodes: [],
-          },
-  }),
-});
-const originalSetTimeout = global.setTimeout;
-global.setTimeout = (callback) => { callback(); return 1; };
+
+const requestedUrls = [];
+global.fetch = async (url) => {
+  requestedUrls.push(String(url));
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      status: 'success',
+      data: String(url).includes('/events?')
+        ? { data: [], current_page: 1, last_page: 2, total: 73 }
+        : String(url).includes('/settings')
+          ? { webhook_secret: 'secret', retention_days: 30, ingest_url: 'https://panel.test/api/v1/traffic-audit/events' }
+          : {
+              cards: { total_bytes: 2048, upload_bytes: 1024, download_bytes: 1024, connections: 4, blocked_events: 1 },
+              routes: [{ route_id: 38, route_tag: 'panel-route-38', action: 'block', outbound: 'block', route_source: 'kernel', connections: 2 }],
+              users: [{ user_id: 7, user_name: 'audit@example.com', connections: 3, upload_bytes: 100, download_bytes: 200, blocked_events: 1 }],
+              destinations: [],
+              nodes: [],
+            },
+    }),
+  };
+};
+
+const immediateTimeout = global.setTimeout;
+global.setTimeout = (callback) => {
+  callback();
+  return 1;
+};
 
 require('../../public/assets/security-audit-adapter.js');
 require('../../public/assets/security-audit-state.js');
 require('../../public/assets/security-audit-api.js');
 require('../../public/assets/security-audit-view.js');
 require('../../public/assets/security-audit.js');
+global.setTimeout = immediateTimeout;
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 async function verify() {
+  migrationCallback();
+  assert.equal(menuInserted, true);
+  assert.equal(menu.id, 'xboard-security-audit-menu');
+  assert.match(menu.innerHTML, /安全审计/);
+  assert.equal(sectionLinks.length, 5);
+  assert.deepEqual(sectionLinks.map((link) => link.textContent), ['审计概览', '流量明细', '规则命中', '用户审计', '审计设置']);
+  assert.match(styles.get('xboard-security-audit-menu-style').textContent, /sa-nav-sub button\.active/);
+
+  const menuClick = menu._toggle.listeners.click;
   assert.equal(typeof menuClick, 'function');
-  assert.equal(menu.childNodes[0].nodeValue, '安全审计');
-  assert.match(style.textContent, /sa-shell/);
-  menuClick({ preventDefault() {}, stopPropagation() {} });
-  await new Promise((resolve) => setImmediate(resolve));
+  menuClick({ preventDefault() {}, stopPropagation() {}, target: menu._toggle });
+  await flush();
   assert.equal(inserted, true);
   assert.equal(native.style.display, 'none');
-  assert.equal(menu['aria-current'], 'page');
+  assert.equal(menu.attributes['aria-current'], 'page');
+  assert.equal(dashboard.attributes['aria-current'], undefined);
+  assert.equal(panels.find((panel) => panel.dataset.saPanel === 'overview').hidden, false);
+  assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
   assert.match(elements.get('sa-cards').innerHTML, /总流量/);
+  assert.match(elements.get('sa-users').innerHTML, /data-sa-user="7"/);
+  assert.equal(sessionValues.get('xboard_security_audit_section'), 'overview');
+
+  const rules = sectionLinks.find((link) => link.dataset.saSection === 'rules');
+  rules.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  await flush();
+  assert.equal(panels.find((panel) => panel.dataset.saPanel === 'rules').hidden, false);
+  assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
+  assert.equal(elements.get('sa-section-title').textContent, '规则命中');
+  assert.equal(rules.classList.contains('active'), true);
+  assert.equal(sessionValues.get('xboard_security_audit_section'), 'rules');
+
+  const user = element({ dataset: { saUser: '7' } });
+  user.closest = (selector) => selector === '[data-sa-user]' ? user : null;
+  page.listeners.click({ target: user });
+  await flush();
+  assert.equal(elements.get('sa-user-id').value, '7');
+  assert.equal(panels.find((panel) => panel.dataset.saPanel === 'traffic').hidden, false);
+  assert.equal(elements.get('sa-section-title').textContent, '流量明细');
+  assert.equal(requestedUrls.some((url) => /user_id=7/.test(url) && /\/events\?/.test(url)), true);
+  assert.match(elements.get('sa-events').innerHTML, /没有连接事件/);
+  assert.match(elements.get('sa-page-info').textContent, /共 73 条/);
+
+  const settings = sectionLinks.find((link) => link.dataset.saSection === 'settings');
+  settings.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  await flush();
+  assert.equal(filterToolbar.hidden, true);
   assert.equal(elements.get('sa-secret').value, 'secret');
+  assert.equal(elements.get('sa-section-title').textContent, '审计设置');
+
   documentClick({
     target: {
       closest(selector) {
@@ -147,8 +280,10 @@ async function verify() {
   });
   assert.equal(inserted, false);
   assert.equal(native.style.display, '');
-  mutation();
-  console.log('security audit native page test passed');
+  assert.equal(dashboard.attributes['aria-current'], 'page');
+
+  assert.equal(typeof hashChange, 'function');
+  console.log('security audit native categories test passed');
 }
 
 verify().catch((error) => {

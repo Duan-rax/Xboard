@@ -6,7 +6,60 @@
     throw new Error('security audit modules must load in order');
   }
   const { api, state, view } = root;
+  const SECTION_KEY = 'xboard_security_audit_section';
+  const sections = {
+    overview: {
+      title: '审计概览',
+      copy: '统一查看所选时间范围内的流量总量、热门目标与节点分布。审计仅记录连接元数据，不记录正文内容。',
+    },
+    traffic: {
+      title: '流量明细',
+      copy: '按用户、节点、目标域名和动作筛选连接审计事件，并查看对应的规则与出站结果。',
+    },
+    rules: {
+      title: '规则命中',
+      copy: '按面板规则聚合连接、流量和最近命中时间，区分内核精确标识与采集器上报来源。',
+    },
+    users: {
+      title: '用户审计',
+      copy: '按用户汇总连接量、总流量和阻断次数；点击任意用户可直接钻取该用户的连接明细。',
+    },
+    settings: {
+      title: '审计设置',
+      copy: '配置节点审计上报地址、认证密钥、事件保留期限和过期数据清理。',
+    },
+  };
   let pageNumber = 1;
+  let requestSerial = 0;
+
+  const sectionName = (section) => Object.prototype.hasOwnProperty.call(sections, section) ? section : 'overview';
+
+  const showSection = (section, persist = true) => {
+    const next = sectionName(section);
+    state.section = next;
+    const page = adapter.page();
+    if (page) {
+      page.querySelectorAll('[data-sa-panel]').forEach((panel) => {
+        panel.hidden = panel.dataset.saPanel !== next;
+      });
+      const toolbar = page.querySelector('[data-sa-filter-toolbar]');
+      if (toolbar) toolbar.hidden = next === 'settings';
+      const title = adapter.get('sa-section-title');
+      const copy = adapter.get('sa-section-copy');
+      if (title) title.textContent = sections[next].title;
+      if (copy) copy.textContent = sections[next].copy;
+    }
+    adapter.setMenuActive(true, next);
+    if (persist) {
+      try {
+        sessionStorage.setItem('xboard_security_audit_open', '1');
+        sessionStorage.setItem(SECTION_KEY, next);
+      } catch (_) {
+        // Ignore hardened browser storage.
+      }
+    }
+    return next;
+  };
 
   const params = () => ({
     range: state.range,
@@ -17,12 +70,13 @@
   });
 
   const load = async () => {
-    if (state.loading) return;
+    const serial = ++requestSerial;
     state.loading = true;
-    view.showMessage('正在加载审计数据…');
+    if (state.section !== 'settings') view.showMessage('正在加载审计数据…');
     try {
       const query = { ...params(), page: pageNumber, per_page: 50 };
       const [overview, events] = await Promise.all([api.overview(query), api.events(query)]);
+      if (serial !== requestSerial) return;
       state.overview = overview;
       state.events = Array.isArray(events?.data) ? events.data : [];
       state.pagination = {
@@ -32,11 +86,13 @@
       };
       pageNumber = state.pagination.current_page;
       view.renderAll();
-      view.showMessage(`已加载 ${state.pagination.total} 条审计事件。`);
+      if (state.section !== 'settings') {
+        view.showMessage(`已加载 ${state.pagination.total} 条审计事件。`);
+      }
     } catch (error) {
-      view.showMessage(error.message, true);
+      if (serial === requestSerial) view.showMessage(error.message, true);
     } finally {
-      state.loading = false;
+      if (serial === requestSerial) state.loading = false;
     }
   };
 
@@ -96,6 +152,7 @@
     if (user) {
       adapter.get('sa-user-id').value = user.dataset.saUser;
       pageNumber = 1;
+      showSection('traffic');
       await load();
       return;
     }
@@ -119,11 +176,31 @@
       adapter.get('sa-secret').value = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
       return;
     }
+    const cleanup = event.target.closest('[data-sa-cleanup]');
+    if (cleanup) {
+      const message = adapter.get('sa-settings-message');
+      cleanup.disabled = true;
+      try {
+        const result = await api.cleanup();
+        if (message) {
+          message.className = 'sa-status';
+          message.textContent = `已清理 ${Number(result?.deleted || 0)} 条过期事件。`;
+        }
+      } catch (error) {
+        if (message) {
+          message.className = 'sa-error';
+          message.textContent = error.message;
+        }
+      } finally {
+        cleanup.disabled = false;
+      }
+      return;
+    }
     const save = event.target.closest('[data-sa-save-settings]');
     if (save) await saveSettings(save);
   };
 
-  const open = async () => {
+  const open = async (requestedSection = 'overview') => {
     let page = adapter.page();
     if (!page) {
       page = adapter.mount(view.html(), view.css);
@@ -134,9 +211,14 @@
         pageNumber = 1;
         await load();
       });
+      adapter.get('sa-range').value = state.range;
     }
-    adapter.setMenuActive(true);
-    await Promise.all([load(), loadSettings()]);
+    const section = showSection(requestedSection);
+    if (section === 'settings') {
+      await loadSettings();
+    } else {
+      await load();
+    }
   };
 
   const close = () => {
@@ -145,9 +227,11 @@
     adapter.unmount();
   };
 
+  root.open = open;
+  root.showSection = showSection;
   adapter.bindLifecycle({
     css: view.css,
-    onOpen: () => void open(),
+    onOpen: (section) => void open(section),
     onClose: close,
   });
 })();
