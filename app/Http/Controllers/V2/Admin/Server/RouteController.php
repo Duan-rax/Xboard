@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Server;
 use App\Models\ServerRoute;
 use App\Services\NodeSyncService;
+use App\Services\RouteRuleAnalyzer;
 use App\Services\RouteRuleValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -23,14 +24,17 @@ class RouteController extends Controller
             ->orderBy('priority')
             ->orderBy('id')
             ->get();
-        $serverCounts = [];
-        foreach (Server::query()->select(['id', 'route_ids'])->get() as $server) {
-            foreach ($server->route_ids ?? [] as $routeId) {
-                $serverCounts[(int) $routeId] = ($serverCounts[(int) $routeId] ?? 0) + 1;
-            }
-        }
-        $routes->each(function (ServerRoute $route) use ($serverCounts) {
-            $route->setAttribute('servers_count', $serverCounts[(int) $route->id] ?? 0);
+        [$bindingsByRoute, $outboundTagsByServer] = $this->routeTopology();
+        $analysis = RouteRuleAnalyzer::analyze(
+            $routes->all(),
+            $bindingsByRoute,
+            $outboundTagsByServer
+        );
+
+        $routes->each(function (ServerRoute $route) use ($bindingsByRoute, $analysis) {
+            $routeId = (int) $route->id;
+            $route->setAttribute('servers_count', count($bindingsByRoute[$routeId] ?? []));
+            $route->setAttribute('diagnostics', $analysis[$routeId] ?? []);
         });
         return [
             'data' => $routes
@@ -279,9 +283,12 @@ class RouteController extends Controller
     public function preview(Request $request)
     {
         $params = $request->validate([
+            'id' => 'nullable|integer|min:1',
             'match' => 'nullable|array',
             'criteria' => 'nullable|array',
             'match_mode' => 'nullable|in:any,all',
+            'priority' => 'nullable|integer|min:0|max:100000',
+            'enabled' => 'nullable|boolean',
             'action' => 'required|in:block,direct,dns,proxy',
             'action_value' => 'nullable|string|max:255',
         ]);
@@ -291,15 +298,38 @@ class RouteController extends Controller
             ? trim((string) ($params['action_value'] ?? ''))
             : null;
         RouteRuleValidator::assertUsable($criteria, $legacyMatch, $params['action'], $target);
+        $candidateId = (int) ($params['id'] ?? 0);
+        $candidate = [
+            'id' => $candidateId,
+            'criteria' => $criteria,
+            'match' => $legacyMatch,
+            'match_mode' => $params['match_mode'] ?? 'any',
+            'priority' => (int) ($params['priority'] ?? 100),
+            'enabled' => $request->boolean('enabled', true),
+            'action' => $params['action'],
+            'action_value' => $target,
+        ];
+        $routes = ServerRoute::query()
+            ->when($candidateId > 0, fn ($query) => $query->whereKeyNot($candidateId))
+            ->get()->all();
+        $routes[] = $candidate;
+        [$bindingsByRoute, $outboundTagsByServer] = $this->routeTopology();
+        $analysis = RouteRuleAnalyzer::analyze($routes, $bindingsByRoute, $outboundTagsByServer);
+        $diagnostics = $analysis[$candidateId] ?? [];
+
         return $this->success([
             'criteria' => $criteria,
             'legacy_match' => $legacyMatch,
             'match_mode' => $params['match_mode'] ?? 'any',
             'action' => $params['action'],
             'target' => $target,
-            'warnings' => RouteRuleValidator::hasCriteria($criteria) ? [] : [
-                '该规则将继续使用旧版匹配格式。',
-            ],
+            'diagnostics' => $diagnostics,
+            'warnings' => array_values(array_filter(array_merge(
+                RouteRuleValidator::hasCriteria($criteria) ? [] : [
+                    '该规则将继续使用旧版匹配格式。',
+                ],
+                array_map(fn ($diagnostic) => $diagnostic['message'] ?? null, $diagnostics)
+            ))),
         ]);
     }
 
@@ -323,6 +353,28 @@ class RouteController extends Controller
             'removed_bindings' => $serverIds->count(),
             'sync' => $this->waitForNodeSync($serverIds, $requestedAt),
         ]);
+    }
+
+    private function routeTopology(): array
+    {
+        $bindingsByRoute = [];
+        $outboundTagsByServer = [];
+
+        foreach (Server::query()->select(['id', 'route_ids', 'custom_outbounds'])->get() as $server) {
+            $serverId = (int) $server->id;
+            foreach ($this->normalizeRouteIds($server->route_ids) as $routeId) {
+                $bindingsByRoute[$routeId] ??= [];
+                $bindingsByRoute[$routeId][] = $serverId;
+            }
+            $outboundTagsByServer[$serverId] = collect($server->custom_outbounds ?: [])
+                ->pluck('tag')
+                ->map(fn ($tag) => trim((string) $tag))
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        return [$bindingsByRoute, $outboundTagsByServer];
     }
 
     private function normalizeRouteIds(?array $routeIds): array
