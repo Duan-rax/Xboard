@@ -164,7 +164,7 @@
         <header class="xe-head">
           <div>
             <h1>路由管理</h1>
-            <p>结构化规则按优先级从小到大执行，可在本页批量绑定 Xray 与 sing-box 节点并查看应用确认。</p>
+            <p>结构化规则按优先级从小到大执行。绑定前会根据节点上报的内核版本与能力校验兼容性，并查看 revision/hash 应用确认。</p>
           </div>
           <span class="xe-badge">ROUTE V2</span>
         </header>
@@ -522,6 +522,8 @@
     duplicate_rule: '重复规则',
     missing_proxy_target: '出站 Tag 缺失',
     unbound_rule: '未绑定节点',
+    node_capability_mismatch: '节点内核不兼容',
+    node_capabilities_unknown: '节点能力待上报',
   };
 
   const routeDiagnostics = (route) => Array.isArray(route?.diagnostics) ? route.diagnostics : [];
@@ -620,15 +622,27 @@
     } else {
       list.innerHTML = `
         <table>
-          <thead><tr><th>选择</th><th>节点</th><th>协议</th><th>状态</th><th>规则状态</th><th>兼容性</th></tr></thead>
+          <thead><tr><th>选择</th><th>节点</th><th>内核</th><th>协议</th><th>状态</th><th>规则状态</th><th>兼容性</th></tr></thead>
           <tbody>${state.bindingNodes.map((node) => `
             <tr>
               <td><input type="checkbox" data-xe-node-check="${node.id}" ${state.bindingSelected.has(Number(node.id)) ? 'checked' : ''}></td>
               <td><div class="xe-node-name"><span class="xe-dot ${node.online ? 'on' : ''}"></span><strong>${esc(node.name || `#${node.id}`)}</strong></div><span class="xe-mono">${esc(node.host || '')}:${Number(node.port || 0)}</span></td>
+              <td>
+                <span class="xe-badge info">${esc(node.capabilities?.kernel || '未上报')}</span><br>
+                <span class="xe-mono" title="${esc((node.capabilities?.features || []).join('\n'))}">${esc(node.capabilities?.kernel_version || '版本未知')}</span><br>
+                <span class="xe-help">${(node.capabilities?.features || []).length} 项能力</span>
+              </td>
               <td><span class="xe-badge">${esc(node.type || '-')}</span></td>
               <td>${node.enabled ? '<span class="xe-badge on">启用</span>' : '<span class="xe-badge off">停用</span>'}</td>
               <td>${node.bound ? '<span class="xe-badge on">已绑定</span>' : '<span class="xe-badge">未绑定</span>'}</td>
-              <td>${node.target_known === false ? '<span class="xe-warning">面板未发现目标 Tag；可能由节点本地配置提供</span>' : '<span class="xe-badge on">可用</span>'}</td>
+              <td>
+                ${node.compatibility?.supported === false
+                  ? `<span class="xe-badge error" title="${esc(node.compatibility?.message || '')}">不兼容</span><br><span class="xe-warning">${esc((node.compatibility?.missing_features || []).join(', '))}</span>`
+                  : node.compatibility?.supported === true
+                    ? '<span class="xe-badge on">规则兼容</span>'
+                    : '<span class="xe-badge warning">能力未上报</span>'}
+                ${node.target_known === false ? '<br><span class="xe-warning">目标 Tag 可能由节点本地配置提供</span>' : ''}
+              </td>
             </tr>`).join('')}</tbody>
         </table>`;
     }

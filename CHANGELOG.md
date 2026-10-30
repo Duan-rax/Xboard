@@ -36,6 +36,9 @@ Release: `v2026.10.30.4`
   acknowledgement for genuine applied-config verification.
 - CIDR network normalization, compressed IPv6 output and IDN/Punycode domain
   normalization for stable rule hashes.
+- Node capability negotiation with kernel name, embedded kernel version and a
+  per-node structured-route feature manifest. The binding page flags unsupported
+  Xray/sing-box combinations, and the server rejects known-incompatible binds.
 
 ### Fixed
 

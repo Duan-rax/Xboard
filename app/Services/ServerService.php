@@ -245,6 +245,7 @@ class ServerService
         $nodeType = strtoupper($node->type);
         $nodeId = $node->id;
         $cacheTime = max(300, (int) admin_setting('server_push_interval', 60) * 3);
+        $capabilities = NodeCapabilityService::fromMetrics($metrics);
 
         $metricsData = [
             'uptime' => (int) ($metrics['uptime'] ?? 0),
@@ -264,6 +265,10 @@ class ServerService
             'limits' => $metrics['limits'] ?? [],
             'updated_at' => now()->timestamp,
             'kernel_status' => (bool) ($metrics['kernel_status'] ?? false),
+            'kernel' => $capabilities['kernel'],
+            'kernel_version' => $capabilities['kernel_version'],
+            'features' => $capabilities['features'],
+            'capabilities_known' => $capabilities['known'],
         ];
 
         Cache::put(

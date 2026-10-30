@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Server;
 use App\Models\ServerRoute;
+use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\RouteRuleAnalyzer;
 use App\Services\RouteRuleValidator;
@@ -31,11 +32,21 @@ class RouteController extends Controller
             $bindingsByRoute,
             $outboundTagsByServer
         );
+        $capabilitiesByServer = $this->nodeCapabilities();
 
-        $routes->each(function (ServerRoute $route) use ($bindingsByRoute, $analysis) {
+        $routes->each(function (ServerRoute $route) use ($bindingsByRoute, $analysis, $capabilitiesByServer) {
             $routeId = (int) $route->id;
             $route->setAttribute('servers_count', count($bindingsByRoute[$routeId] ?? []));
-            $route->setAttribute('diagnostics', $analysis[$routeId] ?? []);
+            $route->setAttribute('diagnostics', array_merge(
+                $analysis[$routeId] ?? [],
+                $this->capabilityDiagnostics(
+                    $this->criteriaForRoute($route),
+                    (string) $route->action,
+                    (string) ($route->match_mode ?: 'any'),
+                    $bindingsByRoute[$routeId] ?? [],
+                    $capabilitiesByServer
+                )
+            ));
         });
         return [
             'data' => $routes
@@ -180,10 +191,12 @@ class RouteController extends Controller
 
         $paginator = $query->paginate($pageSize);
         $target = $route->action === 'proxy' ? trim((string) $route->action_value) : '';
+        $criteria = $this->criteriaForRoute($route);
         return $this->success([
-            'items' => collect($paginator->items())->map(function (Server $server) use ($routeId, $target) {
+            'items' => collect($paginator->items())->map(function (Server $server) use ($route, $routeId, $target, $criteria) {
                 $tags = collect($server->custom_outbounds ?: [])
                     ->pluck('tag')->map(fn ($tag) => trim((string) $tag))->filter()->values();
+                $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
                 return [
                     'id' => (int) $server->id,
                     'name' => $server->name,
@@ -197,6 +210,13 @@ class RouteController extends Controller
                     // False is a warning, not a hard rejection: a node may
                     // define the target in its local custom_config.
                     'target_known' => $target === '' || $tags->contains($target),
+                    'capabilities' => $capabilities,
+                    'compatibility' => NodeCapabilityService::evaluate(
+                        $criteria,
+                        (string) $route->action,
+                        (string) ($route->match_mode ?: 'any'),
+                        $capabilities
+                    ),
                 ];
             })->values(),
             'pagination' => [
@@ -221,6 +241,29 @@ class RouteController extends Controller
         $bound = (bool) $params['bound'];
         $ids = collect($params['server_ids'])->map(fn ($id) => (int) $id)->unique()->values();
         $changedIds = collect();
+        $route = ServerRoute::findOrFail($routeId);
+        if ($bound) {
+            $criteria = $this->criteriaForRoute($route);
+            $incompatible = [];
+            foreach (Server::query()->whereIn('id', $ids)->get() as $server) {
+                $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
+                $compatibility = NodeCapabilityService::evaluate(
+                    $criteria,
+                    (string) $route->action,
+                    (string) ($route->match_mode ?: 'any'),
+                    $capabilities
+                );
+                if ($compatibility['supported'] === false) {
+                    $incompatible[] = "{$server->name} (#{$server->id}): "
+                        . implode(', ', $compatibility['missing_features']);
+                }
+            }
+            if ($incompatible !== []) {
+                throw ValidationException::withMessages([
+                    'server_ids' => ['所选节点不支持此规则：' . implode('；', $incompatible)],
+                ]);
+            }
+        }
 
         DB::transaction(function () use ($ids, $routeId, $bound, $changedIds) {
             $servers = Server::query()->whereIn('id', $ids)->lockForUpdate()->get();
@@ -326,6 +369,18 @@ class RouteController extends Controller
         [$bindingsByRoute, $outboundTagsByServer] = $this->routeTopology();
         $analysis = RouteRuleAnalyzer::analyze($routes, $bindingsByRoute, $outboundTagsByServer);
         $diagnostics = $analysis[$candidateId] ?? [];
+        if ($candidateId > 0) {
+            $diagnostics = array_merge(
+                $diagnostics,
+                $this->capabilityDiagnostics(
+                    $criteria,
+                    $params['action'],
+                    $mode,
+                    $bindingsByRoute[$candidateId] ?? [],
+                    $this->nodeCapabilities()
+                )
+            );
+        }
 
         return $this->success([
             'criteria' => $criteria,
@@ -355,9 +410,12 @@ class RouteController extends Controller
         $servers = Server::query()->where('show', 1)->get()->filter(
             fn (Server $server) => in_array($routeId, $server->route_ids ?? [])
         );
-        $statuses = $servers->map(function (Server $server) {
+        $route = ServerRoute::findOrFail($routeId);
+        $criteria = $this->criteriaForRoute($route);
+        $statuses = $servers->map(function (Server $server) use ($route, $criteria) {
             $expected = ServerService::buildNodeConfig($server);
             $applied = Cache::get("node_config_applied:{$server->id}");
+            $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
             $confirmed = is_array($applied)
                 && (int) ($applied['config_revision'] ?? -1) >= (int) $expected['config_revision']
                 && hash_equals(
@@ -373,6 +431,13 @@ class RouteController extends Controller
                 'applied_hash' => (string) ($applied['config_hash'] ?? ''),
                 'applied_at' => (int) ($applied['applied_at'] ?? 0),
                 'confirmed' => $confirmed,
+                'capabilities' => $capabilities,
+                'compatibility' => NodeCapabilityService::evaluate(
+                    $criteria,
+                    (string) $route->action,
+                    (string) ($route->match_mode ?: 'any'),
+                    $capabilities
+                ),
             ];
         })->values();
 
@@ -425,6 +490,71 @@ class RouteController extends Controller
         }
 
         return [$bindingsByRoute, $outboundTagsByServer];
+    }
+
+    private function criteriaForRoute(ServerRoute $route): array
+    {
+        if (RouteRuleValidator::hasCriteria($route->criteria)) {
+            return RouteRuleValidator::normalizeCriteria($route->criteria ?? []);
+        }
+        return RouteRuleValidator::criteriaFromLegacyMatch($route->match ?? []);
+    }
+
+    private function nodeCapabilities(): array
+    {
+        $result = [];
+        foreach (Server::query()->select(['id', 'type', 'parent_id'])->get() as $server) {
+            $result[(int) $server->id] = NodeCapabilityService::fromMetrics($server->metrics);
+        }
+        return $result;
+    }
+
+    private function capabilityDiagnostics(
+        array $criteria,
+        string $action,
+        string $matchMode,
+        iterable $serverIds,
+        array $capabilitiesByServer
+    ): array {
+        $incompatibleServerIds = [];
+        $unknownServerIds = [];
+        $missingByServer = [];
+        foreach ($serverIds as $serverId) {
+            $capabilities = $capabilitiesByServer[(int) $serverId]
+                ?? ['known' => false, 'features' => []];
+            $compatibility = NodeCapabilityService::evaluate(
+                $criteria,
+                $action,
+                $matchMode,
+                $capabilities
+            );
+            if ($compatibility['supported'] === false) {
+                $incompatibleServerIds[] = (int) $serverId;
+                $missingByServer[(int) $serverId] = $compatibility['missing_features'];
+            } elseif ($compatibility['supported'] === null) {
+                $unknownServerIds[] = (int) $serverId;
+            }
+        }
+        $diagnostics = [];
+        if ($incompatibleServerIds !== []) {
+            $diagnostics[] = [
+                'code' => 'node_capability_mismatch',
+                'severity' => 'error',
+                'server_ids' => $incompatibleServerIds,
+                'missing_by_server' => $missingByServer,
+                'message' => count($incompatibleServerIds)
+                    . ' 个绑定节点的内核不支持该规则所需的匹配能力。',
+            ];
+        }
+        if ($unknownServerIds !== []) {
+            $diagnostics[] = [
+                'code' => 'node_capabilities_unknown',
+                'severity' => 'info',
+                'server_ids' => $unknownServerIds,
+                'message' => '部分节点尚未上报内核能力，升级 Node 后会自动校验。',
+            ];
+        }
+        return $diagnostics;
     }
 
     private function normalizeRouteIds(?array $routeIds): array

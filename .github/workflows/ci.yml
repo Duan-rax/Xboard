@@ -44,6 +44,7 @@ jobs:
           php -l app/Models/EgressProxy.php
           php -l app/Services/EgressProxyValidator.php
           php -l app/Services/RouteRuleValidator.php
+          php -l app/Services/NodeCapabilityService.php
           php -l database/migrations/2026_10_29_000001_create_egress_proxy_table.php
           php -l database/migrations/2026_10_30_000001_add_structured_fields_to_v2_server_route_table.php
           php -l database/migrations/2026_10_30_000002_add_config_revision_to_v2_server_table.php
@@ -76,3 +77,4 @@ jobs:
           vendor/bin/phpunit --filter EgressProxyConfigTest tests/Unit/Services/EgressProxyConfigTest.php
           vendor/bin/phpunit --filter EgressProxyValidatorTest tests/Unit/Services/EgressProxyValidatorTest.php
           vendor/bin/phpunit --filter RouteRuleValidatorTest tests/Unit/Services/RouteRuleValidatorTest.php
+          vendor/bin/phpunit --filter NodeCapabilityServiceTest tests/Unit/Services/NodeCapabilityServiceTest.php

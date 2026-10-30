@@ -111,6 +111,18 @@ global.fetch = async (url, options = {}) => {
               related_route_id: 3,
               message: '匹配条件与更高优先级规则 #3 完全相同。',
             }],
+            capabilities: {
+              known: true,
+              kernel: 'sing-box',
+              kernel_version: 'v1.14.0-alpha.2',
+              features: ['domain_suffix', 'structured_routes'],
+            },
+            compatibility: {
+              supported: true,
+              known: true,
+              missing_features: [],
+              message: '当前规则与节点内核能力兼容。',
+            },
           }],
     }),
   };
