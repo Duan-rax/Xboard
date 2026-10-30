@@ -206,7 +206,7 @@
               </div>
               <div>
                 <label for="xe-target">出站 Tag</label>
-                <input id="xe-target" list="xe-target-options" placeholder="warp-jp / panel-egress-1">
+                <input id="xe-target" list="xe-target-options" placeholder="例如 warp-jp">
                 <datalist id="xe-target-options"></datalist>
               </div>
             </div>
@@ -333,6 +333,7 @@
     document.getElementById('xe-enabled').checked = true;
     document.getElementById('xe-action').value = 'direct';
     document.getElementById('xe-target').value = '';
+    updateTargetState();
     fillCriteria(emptyCriteria());
     document.getElementById('xe-preview').textContent = '尚未校验。';
     showMessage('');
@@ -348,9 +349,18 @@
     document.getElementById('xe-enabled').checked = route.enabled !== false;
     document.getElementById('xe-action').value = route.action || 'direct';
     document.getElementById('xe-target').value = route.action_value || '';
+    updateTargetState();
     fillCriteria(criteriaOf(route));
     document.getElementById('xe-preview').textContent = '正在编辑。点击“校验并预览”查看最终结构。';
     showMessage('');
+  };
+
+  const updateTargetState = () => {
+    const target = document.getElementById('xe-target');
+    const isProxy = values('xe-action') === 'proxy';
+    if (!target) return;
+    target.disabled = !isProxy;
+    if (!isProxy) target.value = '';
   };
 
   const readForm = () => ({
@@ -370,7 +380,7 @@
       source_ports: lines('xe-source-ports'),
     },
     action: values('xe-action') || 'direct',
-    action_value: values('xe-target') || null,
+    action_value: values('xe-action') === 'proxy' ? (values('xe-target') || null) : null,
   });
 
   const matchesSearch = (route) => {
@@ -596,6 +606,7 @@
         state.search = event.target.value.trim();
         renderList();
       });
+      document.getElementById('xe-action')?.addEventListener('change', updateTargetState);
     }
     setMenuActive(true);
     resetForm();

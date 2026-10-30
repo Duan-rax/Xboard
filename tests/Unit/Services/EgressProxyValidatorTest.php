@@ -30,6 +30,17 @@ class EgressProxyValidatorTest extends TestCase
             null
         );
         $this->assertSame([], $valid);
+
+		$oddLength = EgressProxyValidator::errors(
+			'vless',
+			[
+				'uuid' => '6f0c30dc-5e98-4eb1-a52a-042ea7861e08',
+				'reality' => ['public_key' => 'public-key', 'short_id' => 'abc'],
+			],
+			null,
+			'cdn.example.test'
+		);
+		$this->assertArrayHasKey('config.reality.short_id', $oddLength);
     }
 
     public function test_reality_requires_public_key_short_id_and_server_name(): void

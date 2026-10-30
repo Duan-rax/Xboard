@@ -4,7 +4,6 @@ namespace App\Http\Controllers\V2\Admin\Server;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
-use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Models\ServerRoute;
 use App\Services\RouteRuleValidator;
@@ -53,6 +52,9 @@ class RouteController extends Controller
         $params['match'] = array_values(array_filter($params['match'] ?? []));
         $params['criteria'] = $request->has('criteria')
             ? RouteRuleValidator::normalizeCriteria($params['criteria'] ?? [])
+            : null;
+        $params['action_value'] = $params['action'] === 'proxy'
+            ? trim((string) ($params['action_value'] ?? ''))
             : null;
         RouteRuleValidator::assertUsable(
             $params['criteria'],
@@ -110,10 +112,6 @@ class RouteController extends Controller
                 if ($tag !== '') $targets[$tag] = $tag;
             }
         }
-        foreach (EgressProxy::query()->get(['id', 'name']) as $proxy) {
-            $tag = 'panel-egress-' . $proxy->id;
-            $targets[$tag] = "{$proxy->name} ({$tag})";
-        }
         ksort($targets);
         return $this->success([
             'targets' => collect($targets)->map(fn ($label, $tag) => [
@@ -134,13 +132,16 @@ class RouteController extends Controller
         ]);
         $legacyMatch = array_values(array_filter($params['match'] ?? []));
         $criteria = RouteRuleValidator::normalizeCriteria($params['criteria'] ?? []);
-        RouteRuleValidator::assertUsable($criteria, $legacyMatch, $params['action'], $params['action_value'] ?? null);
+        $target = $params['action'] === 'proxy'
+            ? trim((string) ($params['action_value'] ?? ''))
+            : null;
+        RouteRuleValidator::assertUsable($criteria, $legacyMatch, $params['action'], $target);
         return $this->success([
             'criteria' => $criteria,
             'legacy_match' => $legacyMatch,
             'match_mode' => $params['match_mode'] ?? 'any',
             'action' => $params['action'],
-            'target' => $params['action_value'] ?? null,
+            'target' => $target,
             'warnings' => RouteRuleValidator::hasCriteria($criteria) ? [] : [
                 '该规则将继续使用旧版匹配格式。',
             ],
