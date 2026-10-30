@@ -310,7 +310,7 @@ class RouteController extends Controller
             'action_value' => $target,
         ];
         $routes = ServerRoute::query()
-            ->when($candidateId > 0, fn ($query) => $query->whereKeyNot($candidateId))
+            ->when($candidateId > 0, fn ($query) => $query->where('id', '!=', $candidateId))
             ->get()->all();
         $routes[] = $candidate;
         [$bindingsByRoute, $outboundTagsByServer] = $this->routeTopology();
