@@ -70,8 +70,8 @@ class EgressProxyValidator
             $shortId = trim((string) ($reality['short_id'] ?? ''));
             if ($shortId === '') {
                 $errors['config.reality.short_id'] = ['Reality 出站必须填写 short_id。'];
-            } elseif (!preg_match('/^[0-9a-fA-F]{1,16}$/', $shortId)) {
-                $errors['config.reality.short_id'] = ['Reality short_id 必须是 1-16 位十六进制字符。'];
+            } elseif (!preg_match('/^(?:[0-9a-fA-F]{2}){1,8}$/', $shortId)) {
+                $errors['config.reality.short_id'] = ['Reality short_id 必须是 2-16 位、长度为偶数的十六进制字符。'];
             }
         }
 

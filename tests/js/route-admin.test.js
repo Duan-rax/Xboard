@@ -49,7 +49,9 @@ const elements = new Map();
   'xe-form-title', 'xe-id', 'xe-remarks', 'xe-priority', 'xe-match-mode',
   'xe-enabled', 'xe-domains', 'xe-domain-suffixes', 'xe-ip-cidrs', 'xe-ports',
   'xe-networks', 'xe-source-cidrs', 'xe-source-ports', 'xe-action', 'xe-target',
-  'xe-target-options', 'xe-message', 'xe-preview', 'xe-list', 'xe-search',
+  'xe-target-options', 'xe-message', 'xe-preview', 'xe-diagnostic-summary', 'xe-list', 'xe-search',
+  'xe-bind-modal', 'xe-bind-title', 'xe-node-search', 'xe-node-bound',
+  'xe-bind-message', 'xe-node-list', 'xe-node-page',
 ].forEach((id) => elements.set(id, createElement()));
 
 content.insertAdjacentHTML = (position, html) => {
@@ -57,32 +59,62 @@ content.insertAdjacentHTML = (position, html) => {
   if (html.includes('xboard-route-v2-page')) inserted = true;
 };
 
+let pushedLocation = '';
+const windowListeners = {};
 global.window = {
   settings: { secure_path: 'test' },
-  addEventListener() {},
+  location: {
+    href: 'https://panel.test/server/manage',
+    pathname: '/server/manage',
+    search: '',
+    hash: '',
+  },
+  history: {
+    pushState(_state, _title, url) {
+      pushedLocation = String(url);
+      window.location.pathname = new URL(url, window.location.href).pathname;
+      window.location.href = new URL(url, window.location.href).href;
+    },
+  },
+  addEventListener(name, listener) { windowListeners[name] = listener; },
+};
+const tokenStore = {
+  panel_theme_access_token: JSON.stringify({ value: 'token-123' }),
 };
 global.localStorage = {
-  getItem: () => null,
+  get length() { return Object.keys(tokenStore).length; },
+  key: (index) => Object.keys(tokenStore)[index] || null,
+  getItem: (key) => tokenStore[key] ?? null,
 };
-global.fetch = async (url) => ({
-  ok: true,
-  status: 200,
-  json: async () => ({
-    data: String(url).includes('/options')
-      ? { targets: [{ tag: 'warp', label: 'WARP (warp)' }] }
-      : [{
-          id: 7,
-          remarks: '国内直连',
-          criteria: { domain_suffixes: ['example.cn'] },
-          match_mode: 'any',
-          priority: 10,
-          enabled: true,
-          action: 'direct',
-          action_value: null,
-          servers_count: 2,
-        }],
-  }),
-});
+let authorizationHeader = '';
+global.fetch = async (url, options = {}) => {
+  authorizationHeader = options.headers?.Authorization || authorizationHeader;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: String(url).includes('/options')
+        ? { targets: [{ tag: 'warp', label: 'WARP (warp)' }] }
+        : [{
+            id: 7,
+            remarks: '国内直连',
+            criteria: { domain_suffixes: ['example.cn'] },
+            match_mode: 'any',
+            priority: 10,
+            enabled: true,
+            action: 'direct',
+            action_value: null,
+            servers_count: 2,
+            diagnostics: [{
+              code: 'shadowed_rule',
+              severity: 'error',
+              related_route_id: 3,
+              message: '匹配条件与更高优先级规则 #3 完全相同。',
+            }],
+          }],
+    }),
+  };
+};
 global.document = {
   head: { appendChild: (element) => { style = element; } },
   createElement: () => createElement(),
@@ -119,10 +151,16 @@ async function verify() {
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(inserted, true, 'route link must open the embedded structured page');
+  assert.equal(pushedLocation, '/server/route', 'route click must keep browser history in sync');
   assert.match(style.textContent, /xe-layout/);
   assert.equal(existingContent.style.display, 'none');
   assert.equal(routeLink['aria-current'], 'page');
+  assert.equal(authorizationHeader, 'Bearer token-123');
   assert.match(elements.get('xe-list').innerHTML, /国内直连/);
+  assert.match(elements.get('xe-list').innerHTML, /绑定节点/);
+  assert.match(elements.get('xe-list').innerHTML, /停用/);
+  assert.match(elements.get('xe-list').innerHTML, /规则被遮蔽/);
+  assert.match(elements.get('xe-diagnostic-summary').innerHTML, /1 个冲突/);
   assert.match(elements.get('xe-target-options').innerHTML, /warp/);
 
   const otherLink = createElement({

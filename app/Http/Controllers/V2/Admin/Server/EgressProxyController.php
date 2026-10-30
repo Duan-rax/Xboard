@@ -130,9 +130,11 @@ class EgressProxyController extends Controller
             'config.uuid' => 'nullable|string|max:128',
             'config.flow' => 'nullable|string|max:128',
             'config.network' => 'nullable|string|max:32',
+            'config.fingerprint' => 'nullable|string|max:64',
             'config.reality' => 'nullable|array',
             'config.reality.public_key' => 'nullable|string|max:255',
             'config.reality.short_id' => 'nullable|string|max:64',
+            'config.reality.fingerprint' => 'nullable|string|max:64',
             'enabled' => 'nullable|boolean',
             'clear_username' => 'nullable|boolean',
             'clear_password' => 'nullable|boolean',
@@ -284,6 +286,7 @@ class EgressProxyController extends Controller
         });
         $requestedAt = time();
         ServerService::bumpConfigRevision($changedIds->all());
+        $this->clearAppliedConfig($changedIds);
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
@@ -335,6 +338,7 @@ class EgressProxyController extends Controller
         });
         $requestedAt = time();
         ServerService::bumpConfigRevision($changedIds->all());
+        $this->clearAppliedConfig($changedIds);
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
@@ -417,6 +421,13 @@ class EgressProxyController extends Controller
     {
         foreach ($serverIds as $serverId) {
             NodeSyncService::notifyConfigUpdated((int) $serverId);
+        }
+    }
+
+    private function clearAppliedConfig(iterable $serverIds): void
+    {
+        foreach ($serverIds as $serverId) {
+            Cache::forget("node_config_applied:" . (int) $serverId);
         }
     }
 

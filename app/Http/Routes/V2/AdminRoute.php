@@ -83,6 +83,10 @@ class AdminRoute
                 $router->get('/options', [RouteController::class, 'options']);
                 $router->post('/preview', [RouteController::class, 'preview']);
                 $router->post('/sync-status', [RouteController::class, 'syncStatus']);
+                $router->get('/nodes', [RouteController::class, 'nodes']);
+                $router->post('/bind', [RouteController::class, 'bind']);
+                $router->post('/bind-status', [RouteController::class, 'bindStatus']);
+                $router->post('/toggle', [RouteController::class, 'toggle']);
             });
             // 出站管理：配置住宅/HTTP/SOCKS/协议落地并绑定现有节点。
             $router->group([

@@ -13,11 +13,17 @@ class RouteRuleValidator
     public const CRITERIA_KEYS = [
         'domains',
         'domain_suffixes',
+        'domain_keywords',
+        'domain_regexes',
         'ip_cidrs',
         'ports',
         'networks',
         'source_cidrs',
         'source_ports',
+        'protocols',
+        'geoip',
+        'geosite',
+        'rule_sets',
     ];
 
     public static function normalizeCriteria(array $raw): array
@@ -34,6 +40,14 @@ class RouteRuleValidator
         $criteria['domain_suffixes'] = array_map(
             fn ($value) => ltrim(self::normalizeDomain($value), '*.'),
             $criteria['domain_suffixes']
+        );
+        $criteria['domain_keywords'] = array_map(
+            fn ($value) => self::normalizeDomainKeyword($value),
+            $criteria['domain_keywords']
+        );
+        $criteria['domain_regexes'] = array_map(
+            fn ($value) => self::normalizeDomainRegex($value),
+            $criteria['domain_regexes']
         );
         $criteria['ip_cidrs'] = array_map(
             fn ($value) => self::normalizeCidr($value),
@@ -54,6 +68,22 @@ class RouteRuleValidator
         $criteria['networks'] = array_map(
             fn ($value) => self::normalizeNetwork($value),
             $criteria['networks']
+        );
+        $criteria['protocols'] = array_map(
+            fn ($value) => self::normalizeProtocol($value),
+            $criteria['protocols']
+        );
+        $criteria['geoip'] = array_map(
+            fn ($value) => self::normalizeGeoCode($value, 'geoip'),
+            $criteria['geoip']
+        );
+        $criteria['geosite'] = array_map(
+            fn ($value) => self::normalizeGeoCode($value, 'geosite'),
+            $criteria['geosite']
+        );
+        $criteria['rule_sets'] = array_map(
+            fn ($value) => self::normalizeRuleSetTag($value),
+            $criteria['rule_sets']
         );
 
         foreach ($criteria as $key => $values) {
@@ -156,6 +186,13 @@ class RouteRuleValidator
         if (!is_array($values)) {
             return [];
         }
+        foreach ($values as $value) {
+            if (!is_string($value) && !is_int($value) && !is_float($value)) {
+                throw ValidationException::withMessages([
+                    'criteria' => ['匹配条件必须是字符串或数字，不能使用嵌套对象。'],
+                ]);
+            }
+        }
         return array_values(array_filter(array_map(
             fn ($value) => trim((string) $value),
             $values
@@ -214,6 +251,37 @@ class RouteRuleValidator
         return inet_ntop($packed) . "/{$bits}";
     }
 
+    private static function normalizeDomainKeyword(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if ($value === '' || strlen($value) > 255 || preg_match('/[\x00-\x1F\x7F]/', $value)) {
+            throw ValidationException::withMessages([
+                'criteria' => ["域名关键字格式不正确：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
+    private static function normalizeDomainRegex(string $value): string
+    {
+        $value = trim($value);
+        // Both kernels use Go's RE2-compatible regular expressions. Reject
+        // backtracking-only PCRE constructs that would fail when the node
+        // compiles the rule.
+        $unsupported = preg_match(
+            '/\(\?(?:[=!]|<[=!]|[|#>(])|\(\*|\\\\[1-9kKgG]|(?:[*+?]|\{\d+(?:,\d*)?\})\+/',
+            $value
+        );
+        $pattern = '~' . str_replace('~', '\\~', $value) . '~u';
+        if ($value === '' || strlen($value) > 512 || preg_match('/[\x00-\x1F\x7F]/', $value)
+            || $unsupported || @preg_match($pattern, '') === false) {
+            throw ValidationException::withMessages([
+                'criteria' => ["域名正则格式不正确：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
     private static function normalizePortSpec(string $value, string $label): string
     {
         $value = str_replace(':', '-', trim($value));
@@ -241,6 +309,46 @@ class RouteRuleValidator
         if (!in_array($value, ['tcp', 'udp'], true)) {
             throw ValidationException::withMessages([
                 'criteria' => ["网络类型只支持 tcp 或 udp：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
+    private static function normalizeProtocol(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if (!in_array($value, ['http', 'tls', 'quic', 'bittorrent'], true)) {
+            throw ValidationException::withMessages([
+                'criteria' => ["嗅探协议只支持 http、tls、quic 或 bittorrent：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
+    private static function normalizeGeoCode(string $value, string $kind): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/^' . preg_quote($kind, '/') . '[:-]/', '', $value);
+        if ($kind === 'geoip' && str_ends_with((string) $value, '_ip')) {
+            $value = substr((string) $value, 0, -3);
+        }
+        if ($kind === 'geosite' && str_ends_with((string) $value, '_site')) {
+            $value = substr((string) $value, 0, -5);
+        }
+        if ($value === '' || strlen((string) $value) > 128 || !preg_match('/^[a-z0-9_!@.+-]+$/', (string) $value)) {
+            throw ValidationException::withMessages([
+                'criteria' => [strtoupper($kind) . " 规则集名称不正确：{$value}"],
+            ]);
+        }
+        return (string) $value;
+    }
+
+    private static function normalizeRuleSetTag(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || strlen($value) > 128 || !preg_match('/^[A-Za-z0-9_!@.:+-]+$/', $value)) {
+            throw ValidationException::withMessages([
+                'criteria' => ["sing-box Rule Set Tag 不正确：{$value}"],
             ]);
         }
         return $value;

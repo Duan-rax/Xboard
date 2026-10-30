@@ -14,7 +14,10 @@ Release: `v2026.10.30.4`
 ### Added
 
 - Structured route-management editor with exact domains, domain suffixes,
-  IP/CIDR, ports, networks, source CIDRs and source ports.
+  keyword/regex domains, IP/CIDR, ports, networks, source CIDRs, source ports
+  and sniffed application protocols.
+- Dual-kernel GeoIP/GeoSite adaptation: Xray uses native geo data while
+  sing-box uses current remote SRS `rule_set` definitions.
 - `any` and `all` matching modes, explicit priority ordering, enable/disable
   controls and rule validation preview.
 - Route target suggestions for panel custom outbounds and managed egress
@@ -26,6 +29,16 @@ Release: `v2026.10.30.4`
   acknowledgement for genuine applied-config verification.
 - CIDR network normalization, compressed IPv6 output and IDN/Punycode domain
   normalization for stable rule hashes.
+
+### Fixed
+
+- `all` rules keep their AND relationship across domain, IP and port groups
+  instead of accidentally matching a substring.
+- Custom sing-box rule-set and experimental settings merge without losing the
+  generated remote-rule cache.
+- Route management accepts the current admin session token regardless of the
+  theme-specific `*_access_token` localStorage key, so existing routes no
+  longer disappear behind an `Unauthorized` response.
 
 ## 2026.10.30.2
 
