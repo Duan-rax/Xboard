@@ -255,7 +255,10 @@ global.fetch = async (url) => {
               routes: [{ route_id: 38, route_tag: 'panel-route-38', action: 'block', outbound: 'block', route_source: 'kernel', connections: 2 }],
               users: [{ user_id: 7, user_name: 'audit@example.com', connections: 3, upload_bytes: 100, download_bytes: 200, blocked_events: 1 }],
               destinations: [],
-              nodes: [{ node_id: 4, node_name: '日本 01', connections: 2, upload_bytes: 100, download_bytes: 200 }],
+              nodes: [
+                { node_id: 4, node_name: '日本 01', connections: 2, upload_bytes: 100, download_bytes: 200 },
+                { node_id: 28, node_name: '美国 01', connections: 1, upload_bytes: 50, download_bytes: 75 },
+              ].filter((row) => !/node_id=4/.test(String(url)) || row.node_id === 4),
             },
     }),
   };
@@ -315,7 +318,15 @@ async function verify() {
   assert.match(elements.get('sa-users').innerHTML, /data-sa-user="7"/);
   assert.match(elements.get('sa-user-id').innerHTML, /audit@example\.com \(#7\)/);
   assert.match(elements.get('sa-node-id').innerHTML, /日本 01 \(#4\)/);
+  assert.match(elements.get('sa-node-id').innerHTML, /美国 01 \(#28\)/);
   assert.equal(sessionValues.get('xboard_security_audit_section'), 'overview');
+
+  elements.get('sa-node-id').value = '4';
+  elements.get('sa-node-id').listeners.change();
+  await flush();
+  await flush();
+  assert.match(elements.get('sa-node-id').innerHTML, /日本 01 \(#4\)/);
+  assert.match(elements.get('sa-node-id').innerHTML, /美国 01 \(#28\)/);
 
   const rules = sectionLinks.find((link) => link.dataset.saSection === 'rules');
   menuClick({ preventDefault() {}, stopPropagation() {}, target: rules });

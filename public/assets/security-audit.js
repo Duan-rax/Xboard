@@ -78,6 +78,22 @@
       const [overview, events] = await Promise.all([api.overview(query), api.events(query)]);
       if (serial !== requestSerial) return;
       state.overview = overview;
+      const userFilter = String(adapter.get('sa-user-id')?.value || '');
+      const nodeFilter = String(adapter.get('sa-node-id')?.value || '');
+      const destinationFilter = String(adapter.get('sa-destination')?.value || '').trim();
+      const actionFilter = String(adapter.get('sa-action')?.value || '');
+      const mergeOptions = (current, incoming, key) => {
+        const values = new Map((current || []).map((row) => [String(row[key]), row]));
+        (incoming || []).forEach((row) => values.set(String(row[key]), row));
+        return [...values.values()];
+      };
+      const replaceOptions = !userFilter && !nodeFilter && !destinationFilter && !actionFilter;
+      state.filterOptions.users = replaceOptions
+        ? [...(overview.users || [])]
+        : mergeOptions(state.filterOptions.users, overview.users, 'user_id');
+      state.filterOptions.nodes = replaceOptions
+        ? [...(overview.nodes || [])]
+        : mergeOptions(state.filterOptions.nodes, overview.nodes, 'node_id');
       state.events = Array.isArray(events?.data) ? events.data : [];
       state.pagination = {
         current_page: Number(events?.current_page || 1),

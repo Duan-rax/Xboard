@@ -190,7 +190,7 @@
       const selected = String(userSelect.value || '');
       const options = new Map();
       options.set('', '全部用户');
-      (state.overview?.users || []).forEach((row) => {
+      (state.filterOptions?.users || state.overview?.users || []).forEach((row) => {
         const id = String(row.user_id || '');
         if (!id) return;
         options.set(id, row.user_name ? `${row.user_name} (#${id})` : `用户 #${id}`);
@@ -207,7 +207,7 @@
       const selected = String(nodeSelect.value || '');
       const options = new Map();
       options.set('', '全部节点');
-      (state.overview?.nodes || []).forEach((row) => {
+      (state.filterOptions?.nodes || state.overview?.nodes || []).forEach((row) => {
         const id = String(row.node_id || '');
         if (!id) return;
         options.set(id, row.node_name ? `${row.node_name} (#${id})` : `节点 #${id}`);
