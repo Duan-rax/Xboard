@@ -96,7 +96,11 @@
   });
 
   const isRouteHref = (href) => ROUTE_PATH.test(String(href || ''));
-  const isCurrentRoute = () => ROUTE_PATH.test(String(window.location?.pathname || ''));
+  const isCurrentRoute = () => {
+    const pathname = String(window.location?.pathname || '');
+    const hash = String(window.location?.hash || '').replace(/^#/, '');
+    return ROUTE_PATH.test(pathname) || ROUTE_PATH.test(hash);
+  };
 
   const setMenuActive = (active) => {
     const link = routeMenuLink();

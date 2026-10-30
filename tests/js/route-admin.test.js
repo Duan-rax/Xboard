@@ -43,7 +43,7 @@ const content = createElement();
 const existingContent = createElement();
 content.children = [existingContent];
 const routeLink = createElement({
-  href: '/server/route',
+  href: '#/server/route',
   className: 'menu-link',
   getAttribute(name) { return name === 'href' ? this.href : this[name]; },
 });
@@ -68,8 +68,8 @@ const windowListeners = {};
 global.window = {
   settings: { secure_path: 'test' },
   location: {
-    href: 'https://panel.test/server/manage',
-    pathname: '/server/manage',
+    href: 'https://panel.test/test#/server/manage',
+    pathname: '/test',
     search: '',
     hash: '',
   },
@@ -177,8 +177,8 @@ async function verify() {
   assert.equal(existingContent.style.display, '');
 
   setTimeout(() => {
-    window.location.pathname = '/server/route';
-    window.location.href = 'https://panel.test/server/route';
+    window.location.hash = '#/server/route';
+    window.location.href = 'https://panel.test/test#/server/route';
   }, 0);
   await documentClickHandler({
     target: {
@@ -223,16 +223,16 @@ async function verify() {
   assert.equal(existingContent.style.display, '');
   assert.equal(routeLink['aria-current'], undefined);
 
-  window.location.pathname = '/server/route';
-  window.location.href = 'https://panel.test/server/route';
+  window.location.hash = '#/server/route';
+  window.location.href = 'https://panel.test/test#/server/route';
   windowListeners.popstate();
   await new Promise((resolve) => setTimeout(resolve, 220));
   assert.equal(inserted, true, 'popstate must reopen the page on the route URL');
   windowListeners.hashchange();
   assert.equal(inserted, false, 'hash navigation must close the embedded page');
 
-  window.location.pathname = '/server/route';
-  window.location.href = 'https://panel.test/server/route';
+  window.location.hash = '#/server/route';
+  window.location.href = 'https://panel.test/test#/server/route';
   routeMutationCallbacks[0]();
   await new Promise((resolve) => setTimeout(resolve, 180));
   assert.equal(inserted, true, 'SPA DOM updates must reopen a direct route refresh');
