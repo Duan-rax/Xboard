@@ -8,6 +8,7 @@
   const MENU_ID = 'xboard-security-audit-menu';
   const INTENT_KEY = 'xboard_security_audit_open';
   const SECTION_KEY = 'xboard_security_audit_section';
+  const EXPANDED_KEY = 'xboard_security_audit_expanded';
   const MENU_LABEL = '安全审计';
   const MENU_ICON = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -186,13 +187,6 @@
       }
       setVariant(menuLink, true);
       menuLink.setAttribute('aria-current', 'page');
-      menuLink.setAttribute('aria-expanded', 'true');
-      menuLink.setAttribute('data-state', 'open');
-      const submenu = menuLink.parentElement?.querySelector('.sa-nav-sub');
-      if (submenu) {
-        submenu.hidden = false;
-        submenu.setAttribute('data-state', 'open');
-      }
       sectionLinks.forEach((link) => {
         const selected = link.dataset.saSection === section;
         setVariant(link, selected);
@@ -307,13 +301,19 @@
     });
     sectionLinks = [...rowList.querySelectorAll('[data-sa-section]')];
 
-    let expanded = true;
-    const setExpanded = (value) => {
+    let expanded = false;
+    try {
+      expanded = sessionStorage.getItem(EXPANDED_KEY) === '1';
+    } catch (_) {}
+    const setExpanded = (value, persist = true) => {
       expanded = value;
       menuLink.setAttribute('data-state', expanded ? 'open' : 'closed');
       menuLink.setAttribute('aria-expanded', expanded ? 'true' : 'false');
       sectionContainer.hidden = !expanded;
       sectionContainer.setAttribute('data-state', expanded ? 'open' : 'closed');
+      if (persist) {
+        try { sessionStorage.setItem(EXPANDED_KEY, expanded ? '1' : '0'); } catch (_) {}
+      }
     };
     item.addEventListener('click', (event) => {
       event.preventDefault();
@@ -343,7 +343,7 @@
       } catch (_) {}
       onOpen(section);
     }, true);
-    setExpanded(true);
+    setExpanded(expanded, false);
     setVariant(menuLink, false);
     leaf.insertAdjacentElement('afterend', item);
   };

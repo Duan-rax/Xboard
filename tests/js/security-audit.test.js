@@ -287,6 +287,9 @@ async function verify() {
   assert.match(sectionLinks[0].className, /border-l-slate-500/);
   assert.match(sectionLinks[0].className, /text-xs/);
   assert.match(styles.get('xboard-security-audit-menu-style').textContent, /sa-nav-sub\[hidden\]/);
+  assert.equal(submenu.hidden, true);
+  assert.equal(menuLink.attributes['aria-expanded'], 'false');
+  assert.equal(sessionValues.get('xboard_security_audit_expanded'), undefined);
 
   const menuClick = menu.listeners.click;
   assert.equal(typeof menuClick, 'function');
@@ -297,6 +300,8 @@ async function verify() {
   assert.equal(menuLink.attributes['aria-current'], 'page');
   assert.equal(menuLink.classList.contains('active'), true);
   assert.equal(menuLink.classList.contains('bg-secondary'), true);
+  assert.equal(submenu.hidden, false);
+  assert.equal(sessionValues.get('xboard_security_audit_expanded'), '1');
   assert.equal(dashboard.attributes['aria-current'], undefined);
   assert.equal(panels.find((panel) => panel.dataset.saPanel === 'overview').hidden, false);
   assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
