@@ -253,7 +253,10 @@ global.fetch = async (url) => {
           : {
               cards: { total_bytes: 2048, upload_bytes: 1024, download_bytes: 1024, connections: 4, blocked_events: 1 },
               routes: [{ route_id: 38, route_tag: 'panel-route-38', action: 'block', outbound: 'block', route_source: 'kernel', connections: 2 }],
-              users: [{ user_id: 7, user_name: 'audit@example.com', connections: 3, upload_bytes: 100, download_bytes: 200, blocked_events: 1 }],
+              users: [
+                { user_id: 7, user_name: 'audit@example.com', connections: 3, upload_bytes: 100, download_bytes: 200, blocked_events: 1 },
+                { user_id: 1, user_name: 'admin@example.com', connections: 1, upload_bytes: 50, download_bytes: 75, blocked_events: 0 },
+              ].filter((row) => !/user_id=7/.test(String(url)) || row.user_id === 7),
               destinations: [],
               nodes: [
                 { node_id: 4, node_name: '日本 01', connections: 2, upload_bytes: 100, download_bytes: 200 },
@@ -317,6 +320,7 @@ async function verify() {
   assert.match(elements.get('sa-cards').innerHTML, /总流量/);
   assert.match(elements.get('sa-users').innerHTML, /data-sa-user="7"/);
   assert.match(elements.get('sa-user-id').innerHTML, /audit@example\.com \(#7\)/);
+  assert.match(elements.get('sa-user-id').innerHTML, /admin@example\.com \(#1\)/);
   assert.match(elements.get('sa-node-id').innerHTML, /日本 01 \(#4\)/);
   assert.match(elements.get('sa-node-id').innerHTML, /美国 01 \(#28\)/);
   assert.equal(sessionValues.get('xboard_security_audit_section'), 'overview');
@@ -346,6 +350,8 @@ async function verify() {
   assert.equal(elements.get('sa-user-id').value, '7');
   assert.equal(panels.find((panel) => panel.dataset.saPanel === 'traffic').hidden, false);
   assert.equal(elements.get('sa-section-title').textContent, '流量明细');
+  assert.match(elements.get('sa-user-id').innerHTML, /audit@example\.com \(#7\)/);
+  assert.match(elements.get('sa-user-id').innerHTML, /admin@example\.com \(#1\)/);
   assert.equal(requestedUrls.some((url) => /user_id=7/.test(url) && /\/events\?/.test(url)), true);
   assert.match(elements.get('sa-events').innerHTML, /没有连接事件/);
   assert.match(elements.get('sa-page-info').textContent, /共 73 条/);
