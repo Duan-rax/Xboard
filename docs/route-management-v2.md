@@ -117,19 +117,25 @@ Xboard 官方管理 SPA
         ↓
 route-admin-adapter.js
         ↓
-route-admin.js
+route-admin.js（controller）
+        ├── route-admin-state.js
+        ├── route-admin-form.js
+        ├── route-admin-diagnostics.js
+        ├── route-admin-view.js
+        └── route-admin-api.js
 ```
 
 `route-admin-adapter.js` 只负责官方侧栏、菜单选中态、历史路由、页面挂载、
 登录令牌和 API 请求封装。`route-admin.js` 不再直接访问 `document`、`window`
-或 `localStorage`，只维护路由业务状态、表单、诊断和渲染。
+或 `localStorage`，只负责事件编排和工作流。
 
 这样官方 SPA 更新 DOM 或菜单结构时，只需调整适配层；后续可以继续把
-`route-admin.js` 拆为 `api/state/form/diagnostics/view` 模块。
+各业务模块独立测试和调整。当前控制器保持在约 350 行，避免再次形成单个
+近千行的运行时代码文件。
 
 ## 后续路线
 
-1. 将 `route-admin.js` 继续拆成 `api/state/form/diagnostics/view` 模块。
+1. 将出站管理复用相同的官方 SPA 适配层和模块边界。
 2. 把 Xray 与 sing-box 的路由、出站、Rule Set 编译逻辑拆出
    `config.go`，保留稳定的编译入口。
 3. 分离 Fork 专用 Docker、CI 和安装脚本，减少与官方更新冲突。

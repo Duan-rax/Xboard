@@ -147,11 +147,21 @@ global.document = {
 };
 
 require('../../public/assets/route-admin-adapter.js');
+require('../../public/assets/route-admin-state.js');
+require('../../public/assets/route-admin-form.js');
+require('../../public/assets/route-admin-diagnostics.js');
+require('../../public/assets/route-admin-view.js');
+require('../../public/assets/route-admin-api.js');
 require('../../public/assets/route-admin.js');
 
 async function verify() {
   assert.equal(typeof documentClickHandler, 'function');
   assert.equal(typeof globalThis.XboardRouteAdapter, 'object');
+  assert.equal(typeof globalThis.XboardRouteAdmin.state, 'object');
+  assert.equal(typeof globalThis.XboardRouteAdmin.form.read, 'function');
+  assert.equal(typeof globalThis.XboardRouteAdmin.diagnostics.renderSummary, 'function');
+  assert.equal(typeof globalThis.XboardRouteAdmin.view.renderList, 'function');
+  assert.equal(typeof globalThis.XboardRouteAdmin.api.fetchCatalog, 'function');
   assert.equal(existingContent.style.display, '');
 
   await documentClickHandler({
@@ -207,6 +217,11 @@ async function verify() {
 
   const routeSource = fs.readFileSync('public/assets/route-admin.js', 'utf8');
   assert.doesNotMatch(routeSource, /\bdocument\b|\bwindow\b|localStorage/);
+  assert.ok(routeSource.split('\n').length < 600, 'route controller should stay a thin orchestrator');
+  for (const moduleName of ['state', 'form', 'diagnostics', 'view', 'api']) {
+    const moduleSource = fs.readFileSync(`public/assets/route-admin-${moduleName}.js`, 'utf8');
+    assert.doesNotMatch(moduleSource, /\bdocument\b|\bwindow\b|localStorage/, moduleName);
+  }
   console.log('structured route page test passed');
 }
 

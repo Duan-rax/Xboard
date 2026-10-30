@@ -7,6 +7,9 @@ Release dates use the `Asia/Singapore` timezone.
 - Extract the structured route page's official SPA integration into a thin
   `route-admin-adapter.js` boundary. The business module no longer accesses
   `document`, `window`, `localStorage` or fetch/auth details directly.
+- Split the route controller into state, form, diagnostics, view and API
+  modules. The top-level controller is reduced from 867 to about 350 lines and
+  keeps only event orchestration and API workflows.
 
 ## 2026.10.30.8
 

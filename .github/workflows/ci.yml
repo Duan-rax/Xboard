@@ -60,6 +60,11 @@ jobs:
           node --check public/assets/egress-admin.js
           node tests/js/egress-menu.test.js
           node --check public/assets/route-admin-adapter.js
+          node --check public/assets/route-admin-state.js
+          node --check public/assets/route-admin-form.js
+          node --check public/assets/route-admin-diagnostics.js
+          node --check public/assets/route-admin-view.js
+          node --check public/assets/route-admin-api.js
           node --check public/assets/route-admin.js
           node tests/js/route-admin.test.js
 
