@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ServerMachine;
 use App\Models\ServerMachineLoadHistory;
 use App\Services\ServerService;
+use App\Services\TrafficAudit\TrafficAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -115,6 +116,31 @@ class MachineController extends Controller
         }
 
         return response()->json(['data' => true]);
+    }
+
+    public function auditBootstrap(Request $request): JsonResponse
+    {
+        $machine = $this->authenticateMachine($request);
+        $secret = TrafficAuditService::webhookSecret();
+        if ($secret === '') {
+            $secret = bin2hex(random_bytes(24));
+            admin_setting(['traffic_audit_webhook_secret' => $secret]);
+        }
+
+        return response()->json(
+            [
+                'enabled' => true,
+                'machine_id' => $machine->id,
+                'panel_event_url' => url('/api/v1/traffic-audit/events'),
+                'webhook_secret' => $secret,
+                'singbox_audit_api_base_port' => 19090,
+                'audit_manifest_path' => '/etc/xboard-node/traffic-audit-targets.json',
+                'xray_access_log_pattern' => '/var/log/xboard-node/xray-{node_id}.log',
+            ],
+            200,
+            [],
+            JSON_UNESCAPED_SLASHES
+        );
     }
 
     private function authenticateMachine(Request $request): ServerMachine

@@ -56,6 +56,9 @@ jobs:
           php -l app/Http/Routes/V2/AdminRoute.php
           php -l app/Http/Controllers/V1/TrafficAuditIngestController.php
           php -l app/Http/Controllers/V2/Admin/TrafficAuditController.php
+          php -l app/Http/Controllers/V2/Admin/Server/MachineController.php
+          php -l app/Http/Controllers/V2/Server/MachineController.php
+          php -l app/Http/Routes/V2/ServerRoute.php
           php -l app/Services/TrafficAudit/TrafficAuditService.php
           php -l database/migrations/2026_10_31_000001_create_traffic_audit_events_table.php
 
