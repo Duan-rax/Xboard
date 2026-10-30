@@ -41,6 +41,7 @@ let menuInserted = false;
 let migrationCallback = null;
 let documentClick = null;
 let hashChange = null;
+let pageMarkup = '';
 const elements = new Map();
 const styles = new Map();
 const sectionLinks = [];
@@ -62,6 +63,7 @@ const filterToolbar = element();
 page.querySelectorAll = (selector) => selector === '[data-sa-panel]' ? panels : [];
 page.querySelector = (selector) => selector === '[data-sa-filter-toolbar]' ? filterToolbar : null;
 content.insertAdjacentHTML = (_position, markup) => {
+  pageMarkup = markup;
   assert.match(markup, /id="xboard-security-audit-page"/);
   assert.match(markup, /data-sa-panel="overview"/);
   assert.match(markup, /data-sa-panel="traffic" hidden/);
@@ -253,7 +255,7 @@ global.fetch = async (url) => {
               routes: [{ route_id: 38, route_tag: 'panel-route-38', action: 'block', outbound: 'block', route_source: 'kernel', connections: 2 }],
               users: [{ user_id: 7, user_name: 'audit@example.com', connections: 3, upload_bytes: 100, download_bytes: 200, blocked_events: 1 }],
               destinations: [],
-              nodes: [],
+              nodes: [{ node_id: 4, node_name: '日本 01', connections: 2, upload_bytes: 100, download_bytes: 200 }],
             },
     }),
   };
@@ -296,6 +298,10 @@ async function verify() {
   menuClick({ preventDefault() {}, stopPropagation() {}, target: menuLink });
   await flush();
   assert.equal(inserted, true);
+  assert.match(pageMarkup, /<select id="sa-user-id"/);
+  assert.match(pageMarkup, /<select id="sa-node-id"/);
+  assert.doesNotMatch(pageMarkup, /<input id="sa-user-id"/);
+  assert.match(pageMarkup, /data-lpignore="true"/);
   assert.equal(native.style.display, 'none');
   assert.equal(menuLink.attributes['aria-current'], 'page');
   assert.equal(menuLink.classList.contains('active'), true);
@@ -307,6 +313,8 @@ async function verify() {
   assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
   assert.match(elements.get('sa-cards').innerHTML, /总流量/);
   assert.match(elements.get('sa-users').innerHTML, /data-sa-user="7"/);
+  assert.match(elements.get('sa-user-id').innerHTML, /audit@example\.com \(#7\)/);
+  assert.match(elements.get('sa-node-id').innerHTML, /日本 01 \(#4\)/);
   assert.equal(sessionValues.get('xboard_security_audit_section'), 'overview');
 
   const rules = sectionLinks.find((link) => link.dataset.saSection === 'rules');

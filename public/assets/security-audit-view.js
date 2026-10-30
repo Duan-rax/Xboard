@@ -30,6 +30,7 @@
     #${PAGE} .sa-kicker{margin:0 0 5px;color:#2563eb;font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
     #${PAGE} .sa-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
     #${PAGE} input,#${PAGE} select,#${PAGE} button{box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#0f172a;font-size:12.5px}
+    #${PAGE} #sa-user-id,#${PAGE} #sa-node-id{min-width:160px;max-width:260px}
     #${PAGE} button{background:#2563eb;color:#fff;border:0;cursor:pointer}#${PAGE} button.secondary{background:#e2e8f0;color:#334155}#${PAGE} button:disabled{opacity:.5}
     #${PAGE} .sa-cards{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;margin-bottom:14px}
     #${PAGE} .sa-card,#${PAGE} .sa-panel{background:hsl(var(--card,0 0 100%));border:1px solid hsl(var(--border,214 32% 91%));border-radius:12px;padding:16px;min-width:0}
@@ -64,9 +65,9 @@
         </header>
         <div class="sa-toolbar" data-sa-filter-toolbar>
           <select id="sa-range"><option value="1h">1 小时</option><option value="6h">6 小时</option><option value="24h" selected>24 小时</option><option value="7d">7 天</option><option value="14d">14 天</option></select>
-          <input id="sa-user-id" type="number" min="1" placeholder="用户 ID">
-          <input id="sa-node-id" placeholder="节点 ID">
-          <input id="sa-destination" placeholder="域名或 IP">
+          <select id="sa-user-id" aria-label="按用户筛选"><option value="">全部用户</option></select>
+          <select id="sa-node-id" aria-label="按节点筛选"><option value="">全部节点</option></select>
+          <input id="sa-destination" name="audit_destination_search" autocomplete="off" autocapitalize="none" spellcheck="false" data-lpignore="true" data-1p-ignore="true" placeholder="域名或 IP">
           <select id="sa-action"><option value="">全部动作</option><option value="block">阻止</option><option value="reject">内核拒绝</option><option value="direct">直连</option><option value="route">路由</option><option value="hijack-dns">DNS</option></select>
           <button data-sa-refresh>刷新</button>
           <button class="secondary" data-sa-clear>清除筛选</button>
@@ -100,7 +101,7 @@
             <h2>审计接收设置</h2>
             <div class="sa-toolbar" style="margin-top:12px">
             <input id="sa-ingest-url" readonly style="min-width:420px;flex:1">
-            <input id="sa-secret" placeholder="Webhook Secret" style="min-width:300px;flex:1">
+            <input id="sa-secret" name="audit_webhook_config" autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore="true" placeholder="Webhook Secret" style="min-width:300px;flex:1">
             <input id="sa-retention" type="number" min="1" max="365" style="width:110px">
             <button data-sa-generate class="secondary">生成密钥</button>
             <button data-sa-save-settings>保存</button>
@@ -182,7 +183,44 @@
     if (count) count.textContent = `共 ${state.pagination.total || 0} 条事件`;
   };
 
+  const renderFilters = () => {
+    const userSelect = adapter.get('sa-user-id');
+    if (userSelect) {
+      const selected = String(userSelect.value || '');
+      const options = new Map();
+      options.set('', '全部用户');
+      (state.overview?.users || []).forEach((row) => {
+        const id = String(row.user_id || '');
+        if (!id) return;
+        options.set(id, row.user_name ? `${row.user_name} (#${id})` : `用户 #${id}`);
+      });
+      if (selected && !options.has(selected)) options.set(selected, `用户 #${selected}`);
+      userSelect.innerHTML = [...options.entries()]
+        .map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`)
+        .join('');
+      userSelect.value = selected;
+    }
+
+    const nodeSelect = adapter.get('sa-node-id');
+    if (nodeSelect) {
+      const selected = String(nodeSelect.value || '');
+      const options = new Map();
+      options.set('', '全部节点');
+      (state.overview?.nodes || []).forEach((row) => {
+        const id = String(row.node_id || '');
+        if (!id) return;
+        options.set(id, row.node_name ? `${row.node_name} (#${id})` : `节点 #${id}`);
+      });
+      if (selected && !options.has(selected)) options.set(selected, `节点 #${selected}`);
+      nodeSelect.innerHTML = [...options.entries()]
+        .map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`)
+        .join('');
+      nodeSelect.value = selected;
+    }
+  };
+
   const renderAll = () => {
+    renderFilters();
     renderCards();
     renderRoutes();
     renderUsers();

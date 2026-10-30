@@ -212,6 +212,12 @@
         await load();
       });
       adapter.get('sa-range').value = state.range;
+      ['sa-user-id', 'sa-node-id', 'sa-action'].forEach((id) => {
+        adapter.get(id)?.addEventListener('change', async () => {
+          pageNumber = 1;
+          await load();
+        });
+      });
     }
     const section = showSection(requestedSection);
     if (section === 'settings') {
