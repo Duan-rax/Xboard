@@ -1,4 +1,4 @@
-name: CI
+name: Fork CI
 
 on:
   pull_request:
