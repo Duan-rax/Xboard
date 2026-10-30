@@ -45,13 +45,15 @@
     ['users', '用户审计'],
     ['settings', '审计设置'],
   ];
-  const BUTTON_BASE = 'inline-flex items-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
+  const BUTTON_BASE = 'inline-flex items-center gap-2 whitespace-nowrap text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
   const GROUP_BASE = `${BUTTON_BASE} group h-12 w-full justify-start rounded-none px-6`;
   const SUBLINK_BASE = `${BUTTON_BASE} h-10 w-full justify-start text-wrap rounded-none border-l border-l-slate-500 px-2`;
   const ACTIVE_VARIANT = ['bg-secondary', 'text-secondary-foreground', 'shadow-sm', 'hover:bg-secondary/80'];
   const INACTIVE_VARIANT = ['hover:bg-accent', 'hover:text-accent-foreground'];
   const MENU_CSS = `
     .sa-nav-group{list-style:none;width:100%}
+    .sa-nav-toggle,.sa-nav-sub-link{font-size:.75rem;line-height:1rem}
+    .sa-nav-toggle svg,.sa-nav-sub-link svg{width:1rem;height:1rem}
     .sa-nav-sub{list-style:none;margin:0;padding:0}
     .sa-nav-sub[hidden]{display:none}
     [data-collapsed="true"] .sa-nav-group .sa-nav-toggle{width:3rem;padding:0;justify-content:center}

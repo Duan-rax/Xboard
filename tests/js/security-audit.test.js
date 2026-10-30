@@ -233,7 +233,9 @@ async function verify() {
   assert.deepEqual(sectionLinks.map((link) => link.textContent), ['审计概览', '流量明细', '规则命中', '用户审计', '审计设置']);
   assert.match(menu.innerHTML, /my-1 ml-8/);
   assert.match(menu.innerHTML, /border-l-slate-500/);
+  assert.match(menu.innerHTML, /text-xs/);
   assert.match(styles.get('xboard-security-audit-menu-style').textContent, /sa-nav-sub\[hidden\]/);
+  assert.match(styles.get('xboard-security-audit-menu-style').textContent, /font-size:\.75rem/);
 
   const menuClick = menu._toggle.listeners.click;
   assert.equal(typeof menuClick, 'function');
