@@ -2,6 +2,12 @@
 
 Release dates use the `Asia/Singapore` timezone.
 
+## Unreleased
+
+- Extract the structured route page's official SPA integration into a thin
+  `route-admin-adapter.js` boundary. The business module no longer accesses
+  `document`, `window`, `localStorage` or fetch/auth details directly.
+
 ## 2026.10.30.8
 
 Release: `v2026.10.30.8`

@@ -82,6 +82,7 @@
 <body>
   <div id="root"></div>
   <script src="/assets/egress-admin.js?v={{ substr(md5_file(public_path('assets/egress-admin.js')), 0, 12) }}" defer></script>
+  <script src="/assets/route-admin-adapter.js?v={{ substr(md5_file(public_path('assets/route-admin-adapter.js')), 0, 12) }}" defer></script>
   <script src="/assets/route-admin.js?v={{ substr(md5_file(public_path('assets/route-admin.js')), 0, 12) }}" defer></script>
 </body>
 

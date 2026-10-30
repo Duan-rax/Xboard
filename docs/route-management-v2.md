@@ -108,10 +108,28 @@ sing-box，`source_port`、`domain_regex` 和 `dns_action` 也需要节点明确
 在绑定节点页面可以看到内核、版本、能力数量和兼容结果。规则列表和预览也会
 报告已绑定节点中的能力冲突。
 
+## 前端接入边界
+
+路由页面通过薄适配层接入官方后台：
+
+```text
+Xboard 官方管理 SPA
+        ↓
+route-admin-adapter.js
+        ↓
+route-admin.js
+```
+
+`route-admin-adapter.js` 只负责官方侧栏、菜单选中态、历史路由、页面挂载、
+登录令牌和 API 请求封装。`route-admin.js` 不再直接访问 `document`、`window`
+或 `localStorage`，只维护路由业务状态、表单、诊断和渲染。
+
+这样官方 SPA 更新 DOM 或菜单结构时，只需调整适配层；后续可以继续把
+`route-admin.js` 拆为 `api/state/form/diagnostics/view` 模块。
+
 ## 后续路线
 
-1. 将面板的运行时代码拆成 `api/state/form/diagnostics/view/adapter`，让
-   官方 DOM 依赖集中在适配器。
+1. 将 `route-admin.js` 继续拆成 `api/state/form/diagnostics/view` 模块。
 2. 把 Xray 与 sing-box 的路由、出站、Rule Set 编译逻辑拆出
    `config.go`，保留稳定的编译入口。
 3. 分离 Fork 专用 Docker、CI 和安装脚本，减少与官方更新冲突。

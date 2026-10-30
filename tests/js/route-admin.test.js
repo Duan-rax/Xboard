@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 
 const createClassList = () => ({
   values: new Set(),
@@ -145,10 +146,12 @@ global.document = {
   },
 };
 
+require('../../public/assets/route-admin-adapter.js');
 require('../../public/assets/route-admin.js');
 
 async function verify() {
   assert.equal(typeof documentClickHandler, 'function');
+  assert.equal(typeof globalThis.XboardRouteAdapter, 'object');
   assert.equal(existingContent.style.display, '');
 
   await documentClickHandler({
@@ -193,6 +196,17 @@ async function verify() {
   assert.equal(inserted, false);
   assert.equal(existingContent.style.display, '');
   assert.equal(routeLink['aria-current'], undefined);
+
+  window.location.pathname = '/server/route';
+  window.location.href = 'https://panel.test/server/route';
+  windowListeners.popstate();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(inserted, true, 'popstate must reopen the page on the route URL');
+  windowListeners.hashchange();
+  assert.equal(inserted, false, 'hash navigation must close the embedded page');
+
+  const routeSource = fs.readFileSync('public/assets/route-admin.js', 'utf8');
+  assert.doesNotMatch(routeSource, /\bdocument\b|\bwindow\b|localStorage/);
   console.log('structured route page test passed');
 }
 

@@ -59,6 +59,7 @@ jobs:
         run: |
           node --check public/assets/egress-admin.js
           node tests/js/egress-menu.test.js
+          node --check public/assets/route-admin-adapter.js
           node --check public/assets/route-admin.js
           node tests/js/route-admin.test.js
 

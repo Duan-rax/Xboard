@@ -8,14 +8,15 @@
 (() => {
   'use strict';
 
+  const adapter = globalThis.XboardRouteAdapter;
+  if (!adapter) {
+    throw new Error('route-admin-adapter.js must load before route-admin.js');
+  }
+
   const PAGE_ID = 'xboard-route-v2-page';
-  const STYLE_ID = 'xboard-route-v2-style';
   const state = {
     routes: [],
     targets: [],
-    pageHost: null,
-    hiddenHostChildren: [],
-    activeMenuSnapshot: null,
     editingId: 0,
     loading: false,
     search: '',
@@ -26,85 +27,12 @@
     bindingPagination: { current_page: 1, last_page: 1, total: 0 },
   };
 
-  const settings = () => (typeof window !== 'undefined' && window.settings) || {};
-  const securePath = () => String(settings().secure_path || '').replace(/^\/+|\/+$/g, '');
-  const apiBase = () => `/api/v2/${securePath()}/server/route`.replace(/\/+/g, '/');
-  const page = () => document.getElementById(PAGE_ID);
-  const routeMenuLink = () => [...document.querySelectorAll('a[href]')].find((link) => {
-    const href = link.getAttribute('href') || link.href || '';
-    return /\/server\/route(?:[/?#]|$)/.test(href);
-  });
-
-  const parseStoredToken = (raw) => {
-    if (!raw) return '';
-    try {
-      const parsed = JSON.parse(raw);
-      if (typeof parsed === 'string') return parsed.trim();
-      if (parsed && typeof parsed === 'object') {
-        return String(parsed.value || parsed.token || parsed.access_token || '').trim();
-      }
-    } catch (_) {
-      // Plain token.
-    }
-    return String(raw).trim();
-  };
-
-  const authToken = () => {
-    const keys = ['Xboard_access_token', 'Vue_Naive_access_token', 'access_token'];
-    try {
-      for (const key of keys) {
-        const token = parseStoredToken(localStorage.getItem(key));
-        if (token) return token;
-      }
-      const length = Number(localStorage.length) || 0;
-      for (let i = 0; i < length; i += 1) {
-        const key = localStorage.key(i) || '';
-        if (!/access_token$/i.test(key)) continue;
-        const token = parseStoredToken(localStorage.getItem(key));
-        if (token) return token;
-      }
-    } catch (_) {
-      // localStorage can be unavailable in hardened browsers.
-    }
-    return '';
-  };
-
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
   }[c]));
 
-  const request = async (url, options = {}) => {
-    const token = authToken();
-    const authorization = token && !/^Bearer\s/i.test(token) ? `Bearer ${token}` : token;
-    let response;
-    try {
-      response = await fetch(url, {
-        ...options,
-        headers: {
-          Accept: 'application/json',
-          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-          ...(authorization ? { Authorization: authorization } : {}),
-        },
-      });
-    } catch (_) {
-      throw new Error('网络请求失败，请检查面板连接。');
-    }
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch (_) {
-      // Non-JSON proxy error.
-    }
-    if (!response.ok || !payload || payload.status === 'fail') {
-      throw new Error(payload?.message || `请求失败（HTTP ${response.status}）`);
-    }
-    return payload.data;
-  };
-
-  const api = (path, method = 'GET', body) => request(`${apiBase()}${path}`, {
-    method,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const page = adapter.page;
+  const api = adapter.api;
 
   const css = `
     #${PAGE_ID}{height:100%;overflow:auto;background:hsl(var(--background,0 0% 100%));color:hsl(var(--foreground,222.2 84% 4.9%));font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -307,53 +235,15 @@
       </div>
     </section>`;
 
-  const ensureStyle = () => {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = css;
-    document.head.appendChild(style);
-  };
-
-  const setMenuActive = (active) => {
-    const link = routeMenuLink();
-    if (!link) return;
-    if (active) {
-      const current = [...document.querySelectorAll('nav a[href]')]
-        .find((item) => item !== link && item.getAttribute('aria-current') === 'page');
-      if (current) {
-        state.activeMenuSnapshot = {
-          link: current,
-          className: current.className,
-          ariaCurrent: current.getAttribute('aria-current'),
-        };
-        link.className = current.className;
-        current.classList.remove('bg-secondary');
-        current.removeAttribute('aria-current');
-      }
-      link.setAttribute('aria-current', 'page');
-      return;
-    }
-    link.removeAttribute('aria-current');
-    link.classList.remove('bg-secondary');
-    if (state.activeMenuSnapshot?.link) {
-      state.activeMenuSnapshot.link.className = state.activeMenuSnapshot.className;
-      if (state.activeMenuSnapshot.ariaCurrent) {
-        state.activeMenuSnapshot.link.setAttribute('aria-current', state.activeMenuSnapshot.ariaCurrent);
-      }
-    }
-    state.activeMenuSnapshot = null;
-  };
-
   const showMessage = (message, error = false) => {
-    const element = document.getElementById('xe-message');
+    const element = adapter.get('xe-message');
     if (!element) return;
     element.className = error ? 'xe-error' : 'xe-message';
     element.textContent = message;
   };
 
-  const values = (id) => (document.getElementById(id)?.value || '').trim();
-  const lines = (id) => (document.getElementById(id)?.value || '')
+  const values = (id) => (adapter.get(id)?.value || '').trim();
+  const lines = (id) => (adapter.get(id)?.value || '')
     .split(/[\r\n,]+/)
     .map((value) => value.trim())
     .filter(Boolean);
@@ -407,45 +297,45 @@
       rule_sets: 'xe-rule-sets',
     };
     for (const [key, id] of Object.entries(map)) {
-      const element = document.getElementById(id);
+      const element = adapter.get(id);
       if (element) element.value = (criteria?.[key] || []).join('\n');
     }
   };
 
   const resetForm = () => {
     state.editingId = 0;
-    document.getElementById('xe-form-title').textContent = '新增规则';
-    document.getElementById('xe-id').value = '';
-    document.getElementById('xe-remarks').value = '';
-    document.getElementById('xe-priority').value = '100';
-    document.getElementById('xe-match-mode').value = 'any';
-    document.getElementById('xe-enabled').checked = true;
-    document.getElementById('xe-action').value = 'direct';
-    document.getElementById('xe-target').value = '';
+    adapter.get('xe-form-title').textContent = '新增规则';
+    adapter.get('xe-id').value = '';
+    adapter.get('xe-remarks').value = '';
+    adapter.get('xe-priority').value = '100';
+    adapter.get('xe-match-mode').value = 'any';
+    adapter.get('xe-enabled').checked = true;
+    adapter.get('xe-action').value = 'direct';
+    adapter.get('xe-target').value = '';
     updateTargetState();
     fillCriteria(emptyCriteria());
-    document.getElementById('xe-preview').textContent = '尚未校验。';
+    adapter.get('xe-preview').textContent = '尚未校验。';
     showMessage('');
   };
 
   const fillForm = (route) => {
     state.editingId = Number(route.id);
-    document.getElementById('xe-form-title').textContent = `编辑规则 #${route.id}`;
-    document.getElementById('xe-id').value = route.id;
-    document.getElementById('xe-remarks').value = route.remarks || '';
-    document.getElementById('xe-priority').value = route.priority ?? 100;
-    document.getElementById('xe-match-mode').value = route.match_mode || 'any';
-    document.getElementById('xe-enabled').checked = route.enabled !== false;
-    document.getElementById('xe-action').value = route.action || 'direct';
-    document.getElementById('xe-target').value = route.action_value || '';
+    adapter.get('xe-form-title').textContent = `编辑规则 #${route.id}`;
+    adapter.get('xe-id').value = route.id;
+    adapter.get('xe-remarks').value = route.remarks || '';
+    adapter.get('xe-priority').value = route.priority ?? 100;
+    adapter.get('xe-match-mode').value = route.match_mode || 'any';
+    adapter.get('xe-enabled').checked = route.enabled !== false;
+    adapter.get('xe-action').value = route.action || 'direct';
+    adapter.get('xe-target').value = route.action_value || '';
     updateTargetState();
     fillCriteria(criteriaOf(route));
-    document.getElementById('xe-preview').textContent = '正在编辑。点击“校验并预览”查看最终结构。';
+    adapter.get('xe-preview').textContent = '正在编辑。点击“校验并预览”查看最终结构。';
     showMessage('');
   };
 
   const updateTargetState = () => {
-    const target = document.getElementById('xe-target');
+    const target = adapter.get('xe-target');
     const isProxy = values('xe-action') === 'proxy';
     if (!target) return;
     target.disabled = !isProxy;
@@ -457,7 +347,7 @@
     remarks: values('xe-remarks'),
     priority: Number(values('xe-priority') || 100),
     match_mode: values('xe-match-mode') || 'any',
-    enabled: Boolean(document.getElementById('xe-enabled')?.checked),
+    enabled: Boolean(adapter.get('xe-enabled')?.checked),
     match: [],
     criteria: {
       domains: lines('xe-domains'),
@@ -537,7 +427,7 @@
   }).join(' ');
 
   const renderDiagnosticSummary = () => {
-    const target = document.getElementById('xe-diagnostic-summary');
+    const target = adapter.get('xe-diagnostic-summary');
     if (!target) return;
     const counts = { error: 0, warning: 0, info: 0 };
     state.routes.forEach((route) => routeDiagnostics(route).forEach((diagnostic) => {
@@ -557,7 +447,7 @@
   };
 
   const renderList = () => {
-    const list = document.getElementById('xe-list');
+    const list = adapter.get('xe-list');
     if (!list) return;
     renderDiagnosticSummary();
     const items = state.routes.filter(matchesSearch);
@@ -600,7 +490,7 @@
   };
 
   const renderTargets = () => {
-    const datalist = document.getElementById('xe-target-options');
+    const datalist = adapter.get('xe-target-options');
     if (!datalist) return;
     datalist.innerHTML = state.targets.map((target) =>
       `<option value="${esc(target.tag)}">${esc(target.label || target.tag)}${target.server_count ? ` · ${Number(target.server_count)} 个面板节点` : ''}</option>`
@@ -608,14 +498,14 @@
   };
 
   const showBindMessage = (message, error = false) => {
-    const element = document.getElementById('xe-bind-message');
+    const element = adapter.get('xe-bind-message');
     if (!element) return;
     element.className = error ? 'xe-error' : 'xe-message';
     element.textContent = message;
   };
 
   const renderBindingNodes = () => {
-    const list = document.getElementById('xe-node-list');
+    const list = adapter.get('xe-node-list');
     if (!list) return;
     if (!state.bindingNodes.length) {
       list.innerHTML = '<p>没有符合条件的节点。</p>';
@@ -646,7 +536,7 @@
             </tr>`).join('')}</tbody>
         </table>`;
     }
-    const pageLabel = document.getElementById('xe-node-page');
+    const pageLabel = adapter.get('xe-node-page');
     if (pageLabel) {
       pageLabel.textContent = `第 ${state.bindingPagination.current_page || 1} / ${state.bindingPagination.last_page || 1} 页，共 ${state.bindingPagination.total || 0} 个节点`;
     }
@@ -654,7 +544,7 @@
 
   const loadBindingNodes = async (pageNumber = state.bindingPage) => {
     if (!state.bindingRoute) return;
-    const list = document.getElementById('xe-node-list');
+    const list = adapter.get('xe-node-list');
     if (list) list.innerHTML = '<p>正在加载节点…</p>';
     const query = new URLSearchParams({
       route_id: String(state.bindingRoute.id),
@@ -678,8 +568,8 @@
     state.bindingRoute = route;
     state.bindingSelected.clear();
     state.bindingPage = 1;
-    const modal = document.getElementById('xe-bind-modal');
-    const title = document.getElementById('xe-bind-title');
+    const modal = adapter.get('xe-bind-modal');
+    const title = adapter.get('xe-bind-title');
     if (title) title.textContent = `绑定节点：${route.remarks || `#${route.id}`}`;
     if (modal) modal.hidden = false;
     showBindMessage('');
@@ -687,7 +577,7 @@
   };
 
   const closeBinding = () => {
-    const modal = document.getElementById('xe-bind-modal');
+    const modal = adapter.get('xe-bind-modal');
     if (modal) modal.hidden = true;
     state.bindingRoute = null;
     state.bindingNodes = [];
@@ -765,17 +655,17 @@
   const copyRoute = (route) => {
     fillForm(route);
     state.editingId = 0;
-    document.getElementById('xe-id').value = '';
-    document.getElementById('xe-form-title').textContent = '复制规则';
-    document.getElementById('xe-remarks').value = `${route.remarks || `#${route.id}`}（副本）`;
-    document.getElementById('xe-priority').value = Number(route.priority || 100) + 1;
+    adapter.get('xe-id').value = '';
+    adapter.get('xe-form-title').textContent = '复制规则';
+    adapter.get('xe-remarks').value = `${route.remarks || `#${route.id}`}（副本）`;
+    adapter.get('xe-priority').value = Number(route.priority || 100) + 1;
     showMessage('已复制到编辑器，确认后保存。');
   };
 
   const load = async () => {
     if (state.loading) return;
     state.loading = true;
-    const list = document.getElementById('xe-list');
+    const list = adapter.get('xe-list');
     if (list) list.innerHTML = '<p>正在加载…</p>';
     try {
       const [routes, options] = await Promise.all([
@@ -833,7 +723,7 @@
     try {
       const result = await api('/preview', 'POST', readForm());
       const diagnostics = Array.isArray(result?.diagnostics) ? result.diagnostics : [];
-      document.getElementById('xe-preview').textContent = JSON.stringify(result, null, 2);
+      adapter.get('xe-preview').textContent = JSON.stringify(result, null, 2);
       if (diagnostics.some((item) => item.severity === 'error')) {
         showMessage('格式校验通过，但发现会影响规则生效的冲突。', true);
       } else if (diagnostics.some((item) => item.severity === 'warning')) {
@@ -985,86 +875,39 @@
   };
 
   const open = async () => {
-    ensureStyle();
-    let element = page();
-    if (!element) {
-      const host = document.getElementById('content') || document.querySelector('main');
-      if (!host) return;
-      state.pageHost = host;
-      state.hiddenHostChildren = [...host.children].map((child) => ({
-        element: child,
-        display: child.style.display,
-      }));
-      state.hiddenHostChildren.forEach(({ element: child }) => {
-        child.style.display = 'none';
-      });
-      host.insertAdjacentHTML('beforeend', pageHtml());
-      element = page();
+    if (!page()) {
+      const element = adapter.mountPage(pageHtml(), css);
       if (!element) return;
-      element.addEventListener('click', handleClick);
-      document.getElementById('xe-search')?.addEventListener('input', (event) => {
+      adapter.onPage('click', handleClick);
+      adapter.on('xe-search', 'input', (event) => {
         state.search = event.target.value.trim();
         renderList();
       });
-      document.getElementById('xe-action')?.addEventListener('change', updateTargetState);
+      adapter.on('xe-action', 'change', updateTargetState);
     }
-    setMenuActive(true);
+    adapter.setMenuActive(true);
     resetForm();
     await load();
   };
 
   const close = () => {
-    const element = page();
-    if (!element) return;
+    if (!page()) return;
     closeBinding();
-    setMenuActive(false);
-    element.remove();
-    state.hiddenHostChildren.forEach(({ element: child, display }) => {
-      child.style.display = display;
-    });
-    state.hiddenHostChildren = [];
-    state.pageHost = null;
-  };
-
-  const isCurrentRoute = () => /\/server\/route(?:[/?#]|$)/.test(String(window.location?.pathname || ''));
-
-  const updateRouteLocation = (href) => {
-    if (!window.history?.pushState || !window.location) return;
-    try {
-      const target = new URL(href, window.location.href || 'http://localhost/');
-      const next = `${target.pathname}${target.search}${target.hash}`;
-      const current = `${window.location.pathname || ''}${window.location.search || ''}${window.location.hash || ''}`;
-      if (next !== current) window.history.pushState({}, '', next);
-    } catch (_) {
-      // The native menu supplied an invalid URL; opening the editor still works.
-    }
+    adapter.setMenuActive(false);
+    adapter.unmountPage();
   };
 
   const openIfCurrentRoute = () => {
-    if (isCurrentRoute()) {
+    if (adapter.isCurrentRoute()) {
       if (!page()) void open();
       return;
     }
     if (page()) close();
   };
 
-  document.addEventListener('click', (event) => {
-    const link = event.target.closest?.('a[href]');
-    if (link) {
-      const href = link.getAttribute('href') || link.href || '';
-      if (/\/server\/route(?:[/?#]|$)/.test(href)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        updateRouteLocation(href);
-        void open();
-        return;
-      }
-      if (page() && !link.closest(`#${PAGE_ID}`)) close();
-    }
-  }, true);
-
-  window.addEventListener('hashchange', close);
-  window.addEventListener('popstate', () => setTimeout(openIfCurrentRoute, 50));
-  document.addEventListener?.('DOMContentLoaded', () => setTimeout(openIfCurrentRoute, 100));
-  setTimeout(openIfCurrentRoute, 1200);
+  adapter.bindNavigation({
+    onRoute: () => void open(),
+    onClose: close,
+    onResume: openIfCurrentRoute,
+  });
 })();
