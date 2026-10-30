@@ -47,6 +47,7 @@
   ];
   const ACTIVE_VARIANT = ['bg-secondary', 'text-secondary-foreground', 'shadow-sm', 'hover:bg-secondary/80'];
   const INACTIVE_VARIANT = ['hover:bg-accent', 'hover:text-accent-foreground'];
+  const FALLBACK_SUBLINK_CLASS = 'inline-flex items-center gap-2 w-full whitespace-nowrap text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 h-10 justify-start text-wrap rounded-none border-l border-l-slate-500 px-2';
   const MENU_CSS = `
     .sa-nav-sub[hidden]{display:none}
   `;
@@ -232,10 +233,15 @@
     const leaf = dashboard.closest('li') || dashboard;
     const list = leaf.parentElement;
     if (!list) return;
-    const templateGroup = [...list.children].find((candidate) => (
+    const groupCandidates = [...list.children].filter((candidate) => (
       candidate !== leaf
-      && candidate.querySelector?.('ul a[href]')
+      && (
+        candidate.querySelector?.('button[data-state]')
+        || candidate.querySelector?.('button[aria-expanded]')
+      )
     ));
+    const templateGroup = groupCandidates.find((candidate) => candidate.querySelector?.('ul a[href]'))
+      || groupCandidates[0];
     if (!templateGroup) return;
 
     const item = templateGroup.cloneNode(true);
@@ -245,9 +251,9 @@
 
     menuLink = item.querySelector('button');
     const submenu = item.querySelector('.collapsibleDropdown') || item.querySelector('ul')?.parentElement;
-    const rowList = item.querySelector('ul');
+    let rowList = item.querySelector('ul');
     const templateRows = rowList ? [...rowList.children] : [];
-    if (!menuLink || !submenu || !rowList || templateRows.length < MENU_SECTIONS.length) return;
+    if (!menuLink) return;
 
     const replaceDirectLabel = (host, label) => {
       const labelNode = [...host.childNodes].find((node) => node.nodeType === 3 && node.nodeValue.trim());
@@ -265,17 +271,33 @@
     menuLink.removeAttribute('aria-current');
     menuLink.removeAttribute('aria-controls');
 
-    submenu.classList.remove('collapsibleDropdown');
-    submenu.removeAttribute('style');
-    submenu.classList.add('sa-nav-sub');
-    submenu.id = `${MENU_ID}-sections`;
-    menuLink.setAttribute('aria-controls', submenu.id);
+    let sectionContainer = submenu;
+    if (!sectionContainer) {
+      sectionContainer = document.createElement('div');
+      sectionContainer.className = 'collapsibleDropdown';
+      item.appendChild(sectionContainer);
+    }
+    if (!rowList) {
+      rowList = document.createElement('ul');
+      sectionContainer.appendChild(rowList);
+    }
+    sectionContainer.classList.remove('collapsibleDropdown');
+    sectionContainer.removeAttribute('style');
+    sectionContainer.classList.add('sa-nav-sub');
+    sectionContainer.id = `${MENU_ID}-sections`;
+    menuLink.setAttribute('aria-controls', sectionContainer.id);
 
     while (rowList.firstChild) rowList.removeChild(rowList.firstChild);
     MENU_SECTIONS.forEach(([section, label], index) => {
-      const row = templateRows[index].cloneNode(true);
-      const link = row.querySelector('a[href]') || row.querySelector('a');
-      if (!link) return;
+      let row = templateRows[index]?.cloneNode(true);
+      let link = row?.querySelector('a[href]') || row?.querySelector('a');
+      if (!row || !link) {
+        row = document.createElement('li');
+        row.className = 'my-1 ml-8';
+        link = document.createElement('a');
+        link.className = `${FALLBACK_SUBLINK_CLASS} ${INACTIVE_VARIANT.join(' ')}`;
+        row.appendChild(link);
+      }
       link.setAttribute('href', '#');
       link.removeAttribute('aria-current');
       link.dataset.saSection = section;
@@ -290,8 +312,8 @@
       expanded = value;
       menuLink.setAttribute('data-state', expanded ? 'open' : 'closed');
       menuLink.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-      submenu.hidden = !expanded;
-      submenu.setAttribute('data-state', expanded ? 'open' : 'closed');
+      sectionContainer.hidden = !expanded;
+      sectionContainer.setAttribute('data-state', expanded ? 'open' : 'closed');
     };
     item.addEventListener('click', (event) => {
       event.preventDefault();

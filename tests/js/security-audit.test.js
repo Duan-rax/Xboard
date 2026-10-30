@@ -160,7 +160,7 @@ menu.addEventListener = (name, listener) => {
 
 const templateGroup = element({
   querySelector(selector) {
-    return selector === 'ul a[href]' ? true : null;
+    return selector === 'button[data-state]' ? true : null;
   },
   cloneNode() {
     return menu;
