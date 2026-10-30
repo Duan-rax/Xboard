@@ -14,22 +14,52 @@
       <path d="M12 3 5 6v5c0 4.8 2.8 8.1 7 10 4.2-1.9 7-5.2 7-10V6l-7-3Z"></path>
       <path d="m9 12 2 2 4-4"></path>
     </svg>`;
+  const SECTION_ICONS = {
+    overview: `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect>
+        <rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect>
+      </svg>`,
+    traffic: `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 12h4l3-9 4 18 3-9h4"></path>
+      </svg>`,
+    rules: `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 5h16M7 12h10M10 19h4"></path><circle cx="8" cy="5" r="2"></circle><circle cx="15" cy="12" r="2"></circle>
+      </svg>`,
+    users: `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>`,
+    settings: `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 7h-9M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle>
+      </svg>`,
+  };
+  const MENU_SECTIONS = [
+    ['overview', '审计概览'],
+    ['traffic', '流量明细'],
+    ['rules', '规则命中'],
+    ['users', '用户审计'],
+    ['settings', '审计设置'],
+  ];
+  const BUTTON_BASE = 'inline-flex items-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
+  const GROUP_BASE = `${BUTTON_BASE} group h-12 w-full justify-start rounded-none px-6`;
+  const SUBLINK_BASE = `${BUTTON_BASE} h-10 w-full justify-start text-wrap rounded-none border-l border-l-slate-500 px-2`;
+  const ACTIVE_VARIANT = ['bg-secondary', 'text-secondary-foreground', 'shadow-sm', 'hover:bg-secondary/80'];
+  const INACTIVE_VARIANT = ['hover:bg-accent', 'hover:text-accent-foreground'];
   const MENU_CSS = `
     .sa-nav-group{list-style:none;width:100%}
-    .sa-nav-toggle{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .16s ease,color .16s ease}
-    .sa-nav-toggle:hover,.sa-nav-toggle.active{background:hsl(var(--accent,210 40% 96%));color:hsl(var(--accent-foreground,222.2 47.4% 11.2%))}
-    .sa-nav-icon{display:inline-flex;flex:0 0 18px;align-items:center;justify-content:center}
-    .sa-nav-chevron{margin-left:auto;font-size:16px;line-height:1;transition:transform .16s ease}
-    .sa-nav-toggle.expanded .sa-nav-chevron{transform:rotate(180deg)}
-    .sa-nav-sub{display:flex;flex-direction:column;gap:2px;margin:2px 0 5px 28px;padding-left:10px;border-left:1px solid hsl(var(--border,214 32% 91%))}
+    .sa-nav-sub{list-style:none;margin:0;padding:0}
     .sa-nav-sub[hidden]{display:none}
-    .sa-nav-sub button{width:100%;padding:7px 10px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:.92em;text-align:left;cursor:pointer}
-    .sa-nav-sub button:hover{background:hsl(var(--accent,210 40% 96%))}
-    .sa-nav-sub button.active{background:hsl(var(--primary,221.2 83.2% 53.3%));color:hsl(var(--primary-foreground,210 40% 98%));font-weight:600}
+    [data-collapsed="true"] .sa-nav-group .sa-nav-toggle{width:3rem;padding:0;justify-content:center}
+    [data-collapsed="true"] .sa-nav-group .sa-nav-toggle>span{display:none}
+    [data-collapsed="true"] .sa-nav-group .sa-nav-sub{display:none!important}
   `;
 
   let menuLink = null;
-  let menuBaseClass = '';
   let activeMenuSnapshot = null;
   let sectionLinks = [];
   let hiddenChildren = [];
@@ -138,36 +168,52 @@
     restoreHost();
   };
 
+  const setVariant = (element, active) => {
+    if (!element) return;
+    [...ACTIVE_VARIANT, ...INACTIVE_VARIANT].forEach((name) => element.classList.remove(name));
+    (active ? ACTIVE_VARIANT : INACTIVE_VARIANT).forEach((name) => element.classList.add(name));
+    element.classList.toggle('active', active);
+  };
+
   const setMenuActive = (active, section = 'overview') => {
     if (!menuLink) return;
     if (active) {
       const current = [...document.querySelectorAll('nav a[href]')]
-        .find((link) => link !== menuLink && link.getAttribute('aria-current') === 'page');
+        .find((link) => link !== menuLink
+          && !link.closest?.(`#${MENU_ID}`)
+          && link.getAttribute('aria-current') === 'page');
       if (current) {
         activeMenuSnapshot = {
           link: current,
           className: current.className,
           ariaCurrent: current.getAttribute('aria-current'),
         };
-        menuLink.className = `${menuBaseClass} ${current.className}`.trim();
-        current.classList.remove('bg-secondary');
+        current.classList.remove(...ACTIVE_VARIANT);
         current.removeAttribute('aria-current');
       }
+      setVariant(menuLink, true);
       menuLink.setAttribute('aria-current', 'page');
-      menuLink.classList.add('active');
-      menuLink.classList.add('expanded');
       menuLink.setAttribute('aria-expanded', 'true');
+      menuLink.setAttribute('data-state', 'open');
       const submenu = menuLink.parentElement?.querySelector('.sa-nav-sub');
-      if (submenu) submenu.hidden = false;
+      if (submenu) {
+        submenu.hidden = false;
+        submenu.setAttribute('data-state', 'open');
+      }
       sectionLinks.forEach((link) => {
-        link.classList.toggle('active', link.dataset.saSection === section);
+        const selected = link.dataset.saSection === section;
+        setVariant(link, selected);
+        if (selected) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
       });
       return;
     }
-    menuLink.className = menuBaseClass;
+    setVariant(menuLink, false);
     menuLink.removeAttribute('aria-current');
-    menuLink.classList.remove('active');
-    sectionLinks.forEach((link) => link.classList.remove('active'));
+    sectionLinks.forEach((link) => {
+      setVariant(link, false);
+      link.removeAttribute('aria-current');
+    });
     if (activeMenuSnapshot?.link) {
       activeMenuSnapshot.link.className = activeMenuSnapshot.className;
       if (activeMenuSnapshot.ariaCurrent) {
@@ -184,7 +230,6 @@
     if (existing) {
       menuLink = existing.matches('a') ? existing : existing.querySelector('a[href]');
       menuLink = menuLink || existing.querySelector('.sa-nav-toggle');
-      if (!menuBaseClass) menuBaseClass = menuLink?.className || '';
       sectionLinks = [...existing.querySelectorAll('[data-sa-section]')];
       return;
     }
@@ -197,29 +242,34 @@
     const list = leaf.parentElement;
     if (!list) return;
 
-    const item = document.createElement('li');
+    const item = document.createElement('div');
     item.id = MENU_ID;
     item.className = 'sa-nav-group';
     item.innerHTML = `
-      <button type="button" class="sa-nav-toggle" aria-expanded="true">
-        <span class="sa-nav-icon">${MENU_ICON}</span><span>${MENU_LABEL}</span><span class="sa-nav-chevron" data-sa-toggle>⌄</span>
+      <button type="button" class="sa-nav-toggle ${GROUP_BASE} ${INACTIVE_VARIANT.join(' ')}" aria-expanded="true" data-state="open">
+        <div class="mr-2">${MENU_ICON}</div><span>${MENU_LABEL}</span>
+        <span class='ml-auto transition-all group-data-[state="open"]:-rotate-180' data-sa-toggle>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </span>
       </button>
-      <div class="sa-nav-sub">
-        <button type="button" data-sa-section="overview">审计概览</button>
-        <button type="button" data-sa-section="traffic">流量明细</button>
-        <button type="button" data-sa-section="rules">规则命中</button>
-        <button type="button" data-sa-section="users">用户审计</button>
-        <button type="button" data-sa-section="settings">审计设置</button>
-      </div>`;
+      <ul class="sa-nav-sub" data-state="open">
+        ${MENU_SECTIONS.map(([section, label]) => `
+          <li class="my-1 ml-8">
+            <button type="button" data-sa-section="${section}" class="sa-nav-sub-link ${SUBLINK_BASE} ${INACTIVE_VARIANT.join(' ')}">
+              <span class="mr-2 inline-flex">${SECTION_ICONS[section]}</span><span>${label}</span>
+            </button>
+          </li>`).join('')}
+      </ul>`;
     menuLink = item.querySelector('.sa-nav-toggle');
-    menuBaseClass = menuLink.className;
     sectionLinks = [...item.querySelectorAll('[data-sa-section]')];
     let expanded = true;
     const setExpanded = (value) => {
       expanded = value;
-      menuLink.classList.toggle('expanded', expanded);
+      menuLink.setAttribute('data-state', expanded ? 'open' : 'closed');
       menuLink.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-      item.querySelector('.sa-nav-sub').hidden = !expanded;
+      const submenu = item.querySelector('.sa-nav-sub');
+      submenu.hidden = !expanded;
+      submenu.setAttribute('data-state', expanded ? 'open' : 'closed');
     };
     menuLink.addEventListener('click', (event) => {
       event.preventDefault();

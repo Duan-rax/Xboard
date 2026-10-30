@@ -81,7 +81,7 @@ elements.get('sa-action').value = '';
 
 const list = element();
 const menu = element({
-  matches(selector) { return selector === 'a'; },
+  matches() { return false; },
 });
 menu.querySelector = (selector) => {
   if (selector === '.sa-nav-toggle') return menu._toggle;
@@ -93,17 +93,20 @@ menu.querySelectorAll = (selector) => selector === '[data-sa-section]' ? section
 Object.defineProperty(menu, 'innerHTML', {
   set(markup) {
     this._html = markup;
+    const toggleMatch = markup.match(/<button type="button" class="([^"]+)" aria-expanded="true" data-state="open">/);
     const toggle = element({
-      className: 'sa-nav-toggle',
+      className: toggleMatch?.[1] || 'sa-nav-toggle',
       parentElement: menu,
     });
     toggle.closest = (selector) => selector === '[data-sa-toggle]' ? null : null;
-    const submenu = element({ className: 'sa-nav-sub', parentElement: menu });
+    const submenu = element({ className: 'sa-nav-sub collapsibleDropdown', parentElement: menu });
     submenu.querySelectorAll = (selector) => selector === '[data-sa-section]' ? sectionLinks : [];
     sectionLinks.splice(0, sectionLinks.length);
-    for (const match of markup.matchAll(/<button type="button" data-sa-section="([^"]+)">([^<]+)<\/button>/g)) {
+    const sectionPattern = /<button type="button" data-sa-section="([^"]+)" class="([^"]+)">[\s\S]*?<span>([^<]+)<\/span>\s*<\/button>/g;
+    for (const match of markup.matchAll(sectionPattern)) {
       const link = element({
-        textContent: match[2],
+        className: match[2],
+        textContent: match[3],
         parentElement: submenu,
       });
       link.dataset.saSection = match[1];
@@ -160,7 +163,7 @@ global.document = {
     },
   },
   createElement(tag) {
-    if (tag === 'li') return menu;
+    if (tag === 'div') return menu;
     return element({ tag });
   },
   getElementById(id) {
@@ -228,7 +231,9 @@ async function verify() {
   assert.match(menu.innerHTML, /安全审计/);
   assert.equal(sectionLinks.length, 5);
   assert.deepEqual(sectionLinks.map((link) => link.textContent), ['审计概览', '流量明细', '规则命中', '用户审计', '审计设置']);
-  assert.match(styles.get('xboard-security-audit-menu-style').textContent, /sa-nav-sub button\.active/);
+  assert.match(menu.innerHTML, /my-1 ml-8/);
+  assert.match(menu.innerHTML, /border-l-slate-500/);
+  assert.match(styles.get('xboard-security-audit-menu-style').textContent, /sa-nav-sub\[hidden\]/);
 
   const menuClick = menu._toggle.listeners.click;
   assert.equal(typeof menuClick, 'function');
@@ -236,7 +241,9 @@ async function verify() {
   await flush();
   assert.equal(inserted, true);
   assert.equal(native.style.display, 'none');
-  assert.equal(menu.attributes['aria-current'], 'page');
+  assert.equal(menu._toggle.attributes['aria-current'], 'page');
+  assert.equal(menu._toggle.classList.contains('active'), true);
+  assert.equal(menu._toggle.classList.contains('bg-secondary'), true);
   assert.equal(dashboard.attributes['aria-current'], undefined);
   assert.equal(panels.find((panel) => panel.dataset.saPanel === 'overview').hidden, false);
   assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
@@ -251,6 +258,8 @@ async function verify() {
   assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
   assert.equal(elements.get('sa-section-title').textContent, '规则命中');
   assert.equal(rules.classList.contains('active'), true);
+  assert.equal(rules.classList.contains('bg-secondary'), true);
+  assert.equal(sectionLinks.find((link) => link.dataset.saSection === 'overview').classList.contains('active'), false);
   assert.equal(sessionValues.get('xboard_security_audit_section'), 'rules');
 
   const user = element({ dataset: { saUser: '7' } });
