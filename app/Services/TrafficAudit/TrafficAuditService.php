@@ -157,6 +157,49 @@ class TrafficAuditService
             ->paginate(max(1, min(100, $perPage)));
     }
 
+    public function platformTraffic(array $filters = []): array
+    {
+        [$from, $to] = self::resolveRange($filters);
+        $fromTimestamp = $from->timestamp;
+        $toTimestamp = $to->timestamp;
+        $userId = !empty($filters['user_id']) ? (int) $filters['user_id'] : null;
+        $serverId = !empty($filters['node_id']) && ctype_digit((string) $filters['node_id'])
+            ? (int) $filters['node_id']
+            : null;
+
+        $userQuery = DB::table('v2_stat_user')
+            ->whereBetween('record_at', [$fromTimestamp, $toTimestamp])
+            ->when($userId, fn (Builder $query) => $query->where('user_id', $userId));
+        $serverQuery = DB::table('v2_stat_server')
+            ->whereBetween('record_at', [$fromTimestamp, $toTimestamp])
+            ->when($serverId, fn (Builder $query) => $query->where('server_id', $serverId));
+
+        $totals = (clone $userQuery)->selectRaw(
+            'COALESCE(SUM(u),0) upload_bytes, COALESCE(SUM(d),0) download_bytes'
+        )->first();
+
+        return [
+            'from' => $from->toIso8601String(),
+            'to' => $to->toIso8601String(),
+            'cards' => [
+                'upload_bytes' => (int) ($totals->upload_bytes ?? 0),
+                'download_bytes' => (int) ($totals->download_bytes ?? 0),
+                'total_bytes' => (int) ($totals->upload_bytes ?? 0) + (int) ($totals->download_bytes ?? 0),
+            ],
+            'users' => $userQuery
+                ->selectRaw('user_id, COALESCE(SUM(u),0) upload_bytes, COALESCE(SUM(d),0) download_bytes')
+                ->groupBy('user_id')
+                ->orderByDesc(DB::raw('SUM(u + d)'))
+                ->limit(30)
+                ->get(),
+            'nodes' => $serverQuery
+                ->selectRaw('server_id node_id, COALESCE(SUM(u),0) upload_bytes, COALESCE(SUM(d),0) download_bytes')
+                ->groupBy('server_id')
+                ->orderByDesc(DB::raw('SUM(u + d)'))
+                ->get(),
+        ];
+    }
+
     public static function resolveRange(array $filters): array
     {
         $to = isset($filters['to'])

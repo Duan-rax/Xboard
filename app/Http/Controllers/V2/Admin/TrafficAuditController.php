@@ -19,14 +19,25 @@ class TrafficAuditController extends Controller
     {
         $filters = $this->filters($request);
         $data = $this->service->overview($filters);
+        $platform = $this->service->platformTraffic($filters);
+        $usePlatformTraffic = empty($filters['destination'])
+            && empty($filters['action'])
+            && empty($filters['route_id']);
+        $eventUsers = collect($data['users'])->keyBy('user_id');
+        $platformUsers = collect($platform['users'])->keyBy('user_id');
+        $eventNodes = collect($data['nodes'])->keyBy('node_id');
+        $platformNodes = collect($platform['nodes'])->keyBy('node_id');
+        $userIdList = $eventUsers->keys()->merge($platformUsers->keys())->unique()->filter()->values();
+        $nodeIdList = $eventNodes->keys()->merge($platformNodes->keys())->unique()->filter()->values();
+
         $routeNames = ServerRoute::query()
             ->whereIn('id', collect($data['routes'])->pluck('route_id')->filter()->all())
             ->pluck('remarks', 'id');
         $nodeNames = Server::query()
-            ->whereIn('id', collect($data['nodes'])->pluck('node_id')->filter()->map(fn ($id) => (int) $id)->all())
+            ->whereIn('id', $nodeIdList->map(fn ($id) => (int) $id)->all())
             ->pluck('name', 'id');
         $userNames = User::query()
-            ->whereIn('id', collect($data['users'])->pluck('user_id')->filter()->all())
+            ->whereIn('id', $userIdList->all())
             ->pluck('email', 'id');
 
         $data['routes'] = collect($data['routes'])->map(function ($row) use ($routeNames) {
@@ -36,15 +47,37 @@ class TrafficAuditController extends Controller
                 : null;
             return $item;
         })->values()->all();
-        $data['nodes'] = collect($data['nodes'])->map(function ($row) use ($nodeNames) {
-            $item = (array) $row;
-            $item['node_name'] = $nodeNames[(int) $item['node_id']] ?? null;
-            return $item;
+        $data['audit_cards'] = $data['cards'];
+        $data['cards'] = [
+            'upload_bytes' => $usePlatformTraffic ? $platform['cards']['upload_bytes'] : $data['audit_cards']['upload_bytes'],
+            'download_bytes' => $usePlatformTraffic ? $platform['cards']['download_bytes'] : $data['audit_cards']['download_bytes'],
+            'total_bytes' => $usePlatformTraffic ? $platform['cards']['total_bytes'] : $data['audit_cards']['total_bytes'],
+            'connections' => $data['audit_cards']['connections'],
+            'blocked_events' => $data['audit_cards']['blocked_events'],
+        ];
+        $data['platform'] = $platform;
+        $data['nodes'] = $nodeIdList->map(function ($nodeId) use ($eventNodes, $platformNodes, $nodeNames, $usePlatformTraffic) {
+            $event = (array) ($eventNodes->get($nodeId) ?? []);
+            $traffic = (array) ($platformNodes->get($nodeId) ?? []);
+            return [
+                'node_id' => $nodeId,
+                'node_name' => $nodeNames[(int) $nodeId] ?? null,
+                'connections' => (int) ($event['connections'] ?? 0),
+                'upload_bytes' => (int) (($usePlatformTraffic ? $traffic['upload_bytes'] : null) ?? $event['upload_bytes'] ?? 0),
+                'download_bytes' => (int) (($usePlatformTraffic ? $traffic['download_bytes'] : null) ?? $event['download_bytes'] ?? 0),
+            ];
         })->values()->all();
-        $data['users'] = collect($data['users'])->map(function ($row) use ($userNames) {
-            $item = (array) $row;
-            $item['user_name'] = $userNames[(int) $item['user_id']] ?? null;
-            return $item;
+        $data['users'] = $userIdList->map(function ($userId) use ($eventUsers, $platformUsers, $userNames, $usePlatformTraffic) {
+            $event = (array) ($eventUsers->get($userId) ?? []);
+            $traffic = (array) ($platformUsers->get($userId) ?? []);
+            return [
+                'user_id' => $userId,
+                'user_name' => $userNames[(int) $userId] ?? null,
+                'connections' => (int) ($event['connections'] ?? 0),
+                'blocked_events' => (int) ($event['blocked_events'] ?? 0),
+                'upload_bytes' => (int) (($usePlatformTraffic ? $traffic['upload_bytes'] : null) ?? $event['upload_bytes'] ?? 0),
+                'download_bytes' => (int) (($usePlatformTraffic ? $traffic['download_bytes'] : null) ?? $event['download_bytes'] ?? 0),
+            ];
         })->values()->all();
         return $this->success($data);
     }

@@ -79,7 +79,7 @@
             <section class="sa-panel"><h2>热门目标</h2><div id="sa-destinations" class="sa-small">正在加载…</div></section>
             <section class="sa-panel"><h2>节点分布</h2><div id="sa-nodes" class="sa-small">正在加载…</div></section>
           </div>
-          <div class="sa-note">这里展示所选时间范围内的流量总量、热门目标与节点分布。需要定位具体连接或用户时，请使用左侧对应小分类。</div>
+          <div class="sa-note">顶部流量和用户/节点流量来自 Xboard 平台统计，包含 Xray 与 sing-box；热门目标、规则和出站来自审计事件。需要定位具体连接时，请使用左侧对应小分类。</div>
         </section>
         <section data-sa-panel="traffic" hidden>
           <section class="sa-panel">
@@ -87,6 +87,7 @@
             <div id="sa-events" class="sa-small">正在加载…</div>
             <div class="sa-pager"><span class="sa-small" id="sa-page-info"></span><div><button class="secondary" data-sa-prev>上一页</button> <button class="secondary" data-sa-next>下一页</button></div></div>
           </section>
+          <div class="sa-note sa-warning">Xray 访问日志提供目标、用户与连接数，但不提供单连接字节数；对应的连接流量字段为空。平台累计流量请看“审计概览”。</div>
         </section>
         <section data-sa-panel="rules" hidden>
           <section class="sa-panel"><h2>规则命中排行</h2><div id="sa-routes" class="sa-small">正在加载…</div></section>
@@ -126,7 +127,7 @@
     const cards = state.overview?.cards || {};
     if (!el) return;
     el.innerHTML = [
-      ['总流量', bytes(cards.total_bytes)],
+      ['平台总流量', bytes(cards.total_bytes)],
       ['上传', bytes(cards.upload_bytes)],
       ['下载', bytes(cards.download_bytes)],
       ['连接数', Number(cards.connections || 0).toLocaleString()],

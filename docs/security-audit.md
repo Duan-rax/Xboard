@@ -51,6 +51,9 @@ Secret 在“安全审计 → 审计接收设置”中生成或修改。事件�
   并从 Xboard-Node 的数字化用户审计日志关联面板用户 ID。
 - Xray 通过访问日志采集目标、来源、用户 ID 和连接数。Xray 访问日志不包含
   每连接字节计数和出站 Tag，因此这些字段显示为空，不会使用估算值伪造。
+- 审计概览、用户和节点的累计流量读取 Xboard 原有 `v2_stat_user` 与
+  `v2_stat_server`。Xray 的内置 StatsService 累计计数已经用于这些总额，
+  但无法把用户级累计值可靠分摊到某一条连接或某个目标域名。
 
 机器管理页面生成的一键安装命令会使用 fork 的 GitHub Release installer。
 新服务器会自动获取审计引导配置、安装对应架构的采集器，并以 machine token

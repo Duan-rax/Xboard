@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Services\TrafficAudit\TrafficAuditService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -78,5 +79,36 @@ class TrafficAuditServiceTest extends TestCase
         $this->assertSame(300, $overview['cards']['total_bytes']);
         $this->assertSame(7, (int) $overview['users'][0]->user_id);
         $this->assertSame(39, (int) $overview['routes'][0]->route_id);
+    }
+
+    public function test_platform_traffic_uses_xray_stats_tables(): void
+    {
+        if (!Schema::hasTable('v2_stat_user') || !Schema::hasTable('v2_stat_server')) {
+            $this->markTestSkipped('Xboard statistics tables are unavailable');
+        }
+
+        $recordAt = now()->timestamp;
+        DB::table('v2_stat_user')->insert([
+            'user_id' => 7,
+            'u' => 1200,
+            'd' => 3400,
+            'record_at' => $recordAt,
+            'created_at' => $recordAt,
+            'updated_at' => $recordAt,
+        ]);
+        DB::table('v2_stat_server')->insert([
+            'server_id' => 28,
+            'u' => 1500,
+            'd' => 3600,
+            'record_at' => $recordAt,
+            'created_at' => $recordAt,
+            'updated_at' => $recordAt,
+        ]);
+
+        $traffic = app(TrafficAuditService::class)->platformTraffic(['range' => '24h']);
+
+        $this->assertSame(4600, $traffic['cards']['total_bytes']);
+        $this->assertSame(7, (int) $traffic['users'][0]->user_id);
+        $this->assertSame(28, (int) $traffic['nodes'][0]->node_id);
     }
 }
