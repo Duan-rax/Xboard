@@ -2,6 +2,13 @@
 
 Release dates use the `Asia/Singapore` timezone.
 
+## 2026.10.30.4
+
+Release: `v2026.10.30.4`
+
+- Open the structured route editor when `/server/route` is loaded directly or
+  refreshed, not only after clicking the sidebar entry.
+
 ## Unreleased
 
 ### Added

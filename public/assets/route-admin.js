@@ -614,6 +614,13 @@
     state.pageHost = null;
   };
 
+  const openIfCurrentRoute = () => {
+    const path = String(window.location?.pathname || '');
+    if (/\/server\/route(?:[/?#]|$)/.test(path) && !page()) {
+      void open();
+    }
+  };
+
   document.addEventListener('click', (event) => {
     const link = event.target.closest?.('a[href]');
     if (link) {
@@ -629,4 +636,7 @@
   }, true);
 
   window.addEventListener('hashchange', close);
+  window.addEventListener('popstate', () => setTimeout(openIfCurrentRoute, 50));
+  document.addEventListener?.('DOMContentLoaded', () => setTimeout(openIfCurrentRoute, 100));
+  setTimeout(openIfCurrentRoute, 1200);
 })();
