@@ -175,18 +175,6 @@
     return true;
   };
 
-  const updateRouteLocation = (href) => {
-    if (!window.history?.pushState || !window.location) return;
-    try {
-      const target = new URL(href, window.location.href || 'http://localhost/');
-      const next = `${target.pathname}${target.search}${target.hash}`;
-      const current = `${window.location.pathname || ''}${window.location.search || ''}${window.location.hash || ''}`;
-      if (next !== current) window.history.pushState({}, '', next);
-    } catch (_) {
-      // The native menu supplied an invalid URL; opening the editor still works.
-    }
-  };
-
   const on = (elementId, eventName, listener) => {
     get(elementId)?.addEventListener(eventName, listener);
   };
@@ -242,12 +230,12 @@
       if (!link) return;
       const href = link.getAttribute('href') || link.href || '';
       if (isRouteHref(href)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        updateRouteLocation(href);
-        // Let the official router finish its own content re-render before
-        // mounting. A quiet-DOM window avoids depending on a fixed delay.
-        afterShellSettles(onRoute);
+        // Let the official SPA router perform the navigation so its internal
+        // route state stays synchronized. Once its content tree is quiet,
+        // replace the native route page with the structured editor.
+        afterShellSettles(() => {
+          if (isCurrentRoute()) onRoute();
+        });
         return;
       }
       if (page() && !link.closest(`#${PAGE_ID}`)) onClose();

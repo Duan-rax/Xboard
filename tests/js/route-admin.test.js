@@ -176,6 +176,10 @@ async function verify() {
   assert.equal(typeof globalThis.XboardRouteAdmin.api.fetchCatalog, 'function');
   assert.equal(existingContent.style.display, '');
 
+  setTimeout(() => {
+    window.location.pathname = '/server/route';
+    window.location.href = 'https://panel.test/server/route';
+  }, 0);
   await documentClickHandler({
     target: {
       closest(selector) {
@@ -188,7 +192,7 @@ async function verify() {
   await new Promise((resolve) => setTimeout(resolve, 180));
 
   assert.equal(inserted, true, 'route link must open the embedded structured page');
-  assert.equal(pushedLocation, '/server/route', 'route click must keep browser history in sync');
+  assert.equal(pushedLocation, '', 'the adapter must leave navigation to the official router');
   assert.match(style.textContent, /xe-layout/);
   assert.equal(existingContent.style.display, 'none');
   assert.equal(routeLink['aria-current'], 'page');
