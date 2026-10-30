@@ -33,6 +33,7 @@ let inserted = false;
 let style = null;
 let documentClickHandler = null;
 let routeMutationCallback = null;
+const routeMutationCallbacks = [];
 let routeObserverDisconnected = false;
 
 const page = createElement();
@@ -149,7 +150,10 @@ global.document = {
   },
 };
 global.MutationObserver = class {
-  constructor(callback) { routeMutationCallback = callback; }
+  constructor(callback) {
+    routeMutationCallback = callback;
+    routeMutationCallbacks.push(callback);
+  }
   observe() {}
   disconnect() { routeObserverDisconnected = true; }
 };
@@ -181,7 +185,7 @@ async function verify() {
     preventDefault() {},
     stopImmediatePropagation() {},
   });
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  await new Promise((resolve) => setTimeout(resolve, 180));
 
   assert.equal(inserted, true, 'route link must open the embedded structured page');
   assert.equal(pushedLocation, '/server/route', 'route click must keep browser history in sync');
@@ -218,15 +222,15 @@ async function verify() {
   window.location.pathname = '/server/route';
   window.location.href = 'https://panel.test/server/route';
   windowListeners.popstate();
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  await new Promise((resolve) => setTimeout(resolve, 220));
   assert.equal(inserted, true, 'popstate must reopen the page on the route URL');
   windowListeners.hashchange();
   assert.equal(inserted, false, 'hash navigation must close the embedded page');
 
   window.location.pathname = '/server/route';
   window.location.href = 'https://panel.test/server/route';
-  routeMutationCallback();
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  routeMutationCallbacks[0]();
+  await new Promise((resolve) => setTimeout(resolve, 180));
   assert.equal(inserted, true, 'SPA DOM updates must reopen a direct route refresh');
   assert.equal(routeObserverDisconnected, true, 'startup observer must stop after a successful mount');
 

@@ -196,19 +196,45 @@
   };
 
   const bindNavigation = ({ onRoute, onClose, onResume }) => {
-    let resumeQueued = false;
     let startupObserver = null;
+    let resumeTimer = null;
+
+    const stopStartupObserver = () => {
+      if (!startupObserver) return;
+      startupObserver.disconnect();
+      startupObserver = null;
+    };
+
     const resumeWhenReady = () => {
-      if (resumeQueued) return;
-      resumeQueued = true;
-      setTimeout(() => {
-        resumeQueued = false;
+      clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
         onResume();
-        if (page() && startupObserver) {
-          startupObserver.disconnect();
-          startupObserver = null;
-        }
-      }, 0);
+        if (page()) stopStartupObserver();
+      }, 120);
+    };
+
+    const afterShellSettles = (callback) => {
+      let settled = false;
+      let quietTimer = null;
+      let maxTimer = null;
+      const observer = new MutationObserver(() => {
+        clearTimeout(quietTimer);
+        quietTimer = setTimeout(finish, 120);
+      });
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(quietTimer);
+        clearTimeout(maxTimer);
+        observer.disconnect();
+        callback();
+      };
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      quietTimer = setTimeout(finish, 120);
+      maxTimer = setTimeout(finish, 800);
     };
 
     document.addEventListener('click', (event) => {
@@ -220,9 +246,8 @@
         event.stopImmediatePropagation();
         updateRouteLocation(href);
         // Let the official router finish its own content re-render before
-        // mounting the extension. Mounting in this event stack causes React/
-        // Vue to remove the new page immediately after insertion.
-        setTimeout(onRoute, 50);
+        // mounting. A quiet-DOM window avoids depending on a fixed delay.
+        afterShellSettles(onRoute);
         return;
       }
       if (page() && !link.closest(`#${PAGE_ID}`)) onClose();
