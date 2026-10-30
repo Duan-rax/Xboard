@@ -2,6 +2,13 @@
 
 Release dates use the `Asia/Singapore` timezone.
 
+## 2026.10.30.8
+
+Release: `v2026.10.30.8`
+
+- Disable Docker layer caching for immutable tag builds so the packed source
+  commit always matches the release tag.
+
 ## 2026.10.30.4
 
 Release: `v2026.10.30.4`

@@ -89,6 +89,7 @@ jobs:
           context: .
           push: true
           pull: true
+          no-cache: ${{ startsWith(github.ref, 'refs/tags/v') }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
