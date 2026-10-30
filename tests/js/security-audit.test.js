@@ -73,7 +73,7 @@ content.insertAdjacentHTML = (_position, markup) => {
 
 const idNames = [
   'sa-range', 'sa-user-id', 'sa-node-id', 'sa-destination', 'sa-action', 'sa-message',
-  'sa-cards', 'sa-routes', 'sa-users', 'sa-destinations', 'sa-nodes', 'sa-events',
+  'sa-cards', 'sa-routes', 'sa-users', 'sa-destinations', 'sa-nodes', 'sa-health', 'sa-health-summary', 'sa-events',
   'sa-event-count', 'sa-page-info', 'sa-ingest-url', 'sa-secret', 'sa-retention',
   'sa-settings-message', 'sa-section-title', 'sa-section-copy',
 ];
@@ -262,6 +262,13 @@ global.fetch = async (url) => {
                 { node_id: 4, node_name: '日本 01', connections: 2, upload_bytes: 100, download_bytes: 200 },
                 { node_id: 28, node_name: '美国 01', connections: 1, upload_bytes: 50, download_bytes: 75 },
               ].filter((row) => !/node_id=4/.test(String(url)) || row.node_id === 4),
+              health: {
+                summary: { nodes: 2, healthy: 1, delayed: 1, stale: 0, no_events: 0, user_link_rate: 75, route_identity_rate: 50 },
+                nodes: [
+                  { node_id: 4, node_name: '日本 01', protocol: 'anytls', health_status: 'healthy', health_label: '正常', connections: 2, linked_connections: 2, unlinked_connections: 0, user_link_rate: 100, route_identified_connections: 2, route_missing_connections: 0, route_identity_rate: 100, upload_bytes: 100, download_bytes: 200 },
+                  { node_id: 28, node_name: '美国 01', protocol: 'vless', health_status: 'delayed', health_label: '延迟', connections: 2, linked_connections: 1, unlinked_connections: 1, user_link_rate: 50, route_identified_connections: 0, route_missing_connections: 2, route_identity_rate: 0, upload_bytes: 50, download_bytes: 75 },
+                ],
+              },
             },
     }),
   };
@@ -327,6 +334,9 @@ async function verify() {
   assert.match(elements.get('sa-user-id').innerHTML, /admin@example\.com \(#1\)/);
   assert.match(elements.get('sa-node-id').innerHTML, /日本 01 \(#4\)/);
   assert.match(elements.get('sa-node-id').innerHTML, /美国 01 \(#28\)/);
+  assert.match(elements.get('sa-health').innerHTML, /审计覆盖|正常/);
+  assert.match(elements.get('sa-health').innerHTML, /美国 01/);
+  assert.match(elements.get('sa-health-summary').textContent, /用户关联 75\.0%/);
   assert.equal(sessionValues.get('xboard_security_audit_section'), 'overview');
 
   elements.get('sa-node-id').value = '4';

@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Services\TrafficAudit\TrafficAuditService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -10,6 +11,7 @@ use Tests\TestCase;
 class TrafficAuditServiceTest extends TestCase
 {
     private object $migration;
+    private bool $createdServerTable = false;
 
     protected function setUp(): void
     {
@@ -24,6 +26,9 @@ class TrafficAuditServiceTest extends TestCase
     protected function tearDown(): void
     {
         $this->migration->down();
+        if ($this->createdServerTable) {
+            Schema::dropIfExists('v2_server');
+        }
         parent::tearDown();
     }
 
@@ -110,5 +115,59 @@ class TrafficAuditServiceTest extends TestCase
         $this->assertSame(4600, $traffic['cards']['total_bytes']);
         $this->assertSame(7, (int) $traffic['users'][0]->user_id);
         $this->assertSame(28, (int) $traffic['nodes'][0]->node_id);
+    }
+
+    public function test_health_reports_node_coverage_and_identity_rates(): void
+    {
+        if (!Schema::hasTable('v2_server')) {
+            Schema::create('v2_server', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name');
+                $table->string('type');
+                $table->unsignedBigInteger('machine_id')->nullable();
+                $table->unsignedInteger('parent_id')->nullable();
+                $table->boolean('enabled')->nullable()->default(true);
+                $table->integer('sort')->nullable();
+            });
+            $this->createdServerTable = true;
+        }
+
+        DB::table('v2_server')->insert([
+            'id' => 901,
+            'type' => 'vless',
+            'name' => '健康测试节点',
+            'enabled' => true,
+            'parent_id' => 0,
+        ]);
+        TrafficAuditService::insertEvent([
+            'event_id' => 'health-linked',
+            'connection_id' => 'health-conn-1',
+            'user_id' => 7,
+            'node_id' => '901',
+            'occurred_at' => now()->toIso8601String(),
+            'action' => 'observe',
+            'route_id' => 39,
+            'route_tag' => 'panel-route-39',
+            'upload_bytes' => 100,
+            'download_bytes' => 200,
+        ]);
+        TrafficAuditService::insertEvent([
+            'event_id' => 'health-unlinked',
+            'connection_id' => 'health-conn-2',
+            'node_id' => '901',
+            'occurred_at' => now()->toIso8601String(),
+            'action' => 'observe',
+        ]);
+
+        $health = app(TrafficAuditService::class)->health(['range' => '24h']);
+        $row = collect($health['nodes'])->firstWhere('node_id', '901');
+
+        $this->assertNotNull($row);
+        $this->assertSame('healthy', $row['health_status']);
+        $this->assertSame(2, $row['connections']);
+        $this->assertSame(1, $row['linked_connections']);
+        $this->assertSame(1, $row['unlinked_connections']);
+        $this->assertSame(50.0, $row['user_link_rate']);
+        $this->assertSame(50.0, $row['route_identity_rate']);
     }
 }

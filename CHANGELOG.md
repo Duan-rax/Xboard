@@ -4,6 +4,11 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Add per-node audit coverage health to the security overview: last event,
+  reporting freshness, user-link rate, route-identity rate and empty coverage
+  states for enabled logical nodes.
+- Clarify that aggregate traffic originates from Xboard platform statistics,
+  while Xray connection-level byte counters require the patched fork backend.
 - Extract the structured route page's official SPA integration into a thin
   `route-admin-adapter.js` boundary. The business module no longer accesses
   `document`, `window`, `localStorage` or fetch/auth details directly.

@@ -68,6 +68,8 @@
     #${PAGE} code{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#334155;word-break:break-all}
     #${PAGE} .sa-badge{display:inline-block;padding:1px 6px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:10px;font-weight:600}
     #${PAGE} .sa-badge.block{background:#fee2e2;color:#b91c1c}#${PAGE} .sa-badge.route{background:#dcfce7;color:#15803d}
+    #${PAGE} .sa-badge.healthy{background:#dcfce7;color:#15803d}#${PAGE} .sa-badge.delayed{background:#fef3c7;color:#b45309}
+    #${PAGE} .sa-badge.stale,#${PAGE} .sa-badge.no_events{background:#fee2e2;color:#b91c1c}
     #${PAGE} .sa-error{color:#dc2626;font-size:11.5px;white-space:pre-wrap}#${PAGE} .sa-status{color:#15803d;font-size:11.5px}
     #${PAGE} .sa-pager{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
     #${PAGE} .sa-user-link{border:0;background:none;color:#2563eb;padding:0;cursor:pointer}
@@ -103,6 +105,10 @@
             <section class="sa-panel"><h2>热门目标</h2><div id="sa-destinations" class="sa-small">正在加载…</div></section>
             <section class="sa-panel"><h2>节点分布</h2><div id="sa-nodes" class="sa-small">正在加载…</div></section>
           </div>
+          <section class="sa-panel" style="margin-bottom:14px">
+            <div class="sa-panel-head"><div><h2>审计覆盖与健康度</h2><p>按所选时间范围检查节点最近上报、用户关联率和规则标识完整率。此面板不受用户、目标或动作筛选影响。</p></div><span id="sa-health-summary" class="sa-small"></span></div>
+            <div id="sa-health" class="sa-small">正在加载…</div>
+          </section>
           <div class="sa-note">顶部流量和用户/节点流量来自 Xboard 平台统计，包含 Xray 与 sing-box；热门目标、规则和出站来自审计事件。需要定位具体连接时，请使用左侧对应小分类。</div>
         </section>
         <section data-sa-panel="traffic" hidden>
@@ -181,6 +187,29 @@
       : '<p>当前时间范围内没有用户维度数据。</p>';
   };
 
+  const percent = (value) => value == null ? '-' : `${Number(value).toFixed(1)}%`;
+
+  const renderHealth = () => {
+    const el = adapter.get('sa-health');
+    const summaryEl = adapter.get('sa-health-summary');
+    const health = state.overview?.health || {};
+    const rows = health.nodes || [];
+    const summary = health.summary || {};
+    if (summaryEl) {
+      summaryEl.textContent = `${Number(summary.nodes || 0)} 个节点 · 正常 ${Number(summary.healthy || 0)} · 延迟 ${Number(summary.delayed || 0)} · 无事件 ${Number(summary.no_events || 0)} · 用户关联 ${percent(summary.user_link_rate)}`;
+    }
+    if (!el) return;
+    el.innerHTML = rows.length ? `<div class="sa-table-wrap"><table><thead><tr><th>节点</th><th>状态</th><th>最近事件</th><th>连接</th><th>用户关联</th><th>规则标识</th><th>审计流量</th></tr></thead><tbody>${rows.map((row) => `
+      <tr><td><b>${esc(row.node_name || `节点 #${row.node_id}`)}</b><br><span class="sa-small">#${esc(row.node_id)} · ${esc(row.protocol || '-')}</span></td>
+      <td><span class="sa-badge ${esc(row.health_status || 'no_events')}">${esc(row.health_label || '-')}</span></td>
+      <td>${time(row.last_event_at)}</td>
+      <td>${Number(row.connections || 0).toLocaleString()}<br><span class="sa-small">${Number(row.unlinked_connections || 0)} 未关联</span></td>
+      <td>${percent(row.user_link_rate)}<br><span class="sa-small">${Number(row.linked_connections || 0)}/${Number(row.connections || 0)}</span></td>
+      <td>${percent(row.route_identity_rate)}<br><span class="sa-small">${Number(row.route_missing_connections || 0)} 未标识</span></td>
+      <td>${bytes(Number(row.upload_bytes || 0) + Number(row.download_bytes || 0))}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p>所选时间范围内没有可检查的启用节点。</p>';
+  };
+
   const renderSimple = (id, rows, nameKey, idKey) => {
     const el = adapter.get(id);
     if (!el) return;
@@ -249,6 +278,7 @@
     renderCards();
     renderRoutes();
     renderUsers();
+    renderHealth();
     renderSimple('sa-destinations', state.overview?.destinations || [], 'destination', 'destination');
     renderSimple('sa-nodes', state.overview?.nodes || [], 'node_name', 'node_id');
     renderEvents();

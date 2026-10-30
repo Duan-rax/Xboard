@@ -2,6 +2,7 @@
 
 namespace App\Services\TrafficAudit;
 
+use App\Models\Server;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
@@ -197,6 +198,114 @@ class TrafficAuditService
                 ->groupBy('server_id')
                 ->orderByDesc(DB::raw('SUM(u + d)'))
                 ->get(),
+        ];
+    }
+
+    /**
+     * Build an audit coverage view for every enabled logical node.
+     *
+     * Health deliberately ignores user/action/destination filters: those
+     * dimensions describe what to inspect, not whether a node is reporting.
+     * The selected time range and optional node filter still apply.
+     */
+    public function health(array $filters = []): array
+    {
+        [$from, $to] = self::resolveRange($filters);
+        $query = DB::table('v2_traffic_audit_events')
+            ->whereBetween('occurred_at', [$from, $to])
+            ->when(!empty($filters['node_id']), fn (Builder $q) => $q->where('node_id', $filters['node_id']))
+            ->whereNotNull('node_id')
+            ->selectRaw(
+                'node_id, COUNT(*) events, ' .
+                'COUNT(DISTINCT COALESCE(connection_id,event_id)) connections, ' .
+                'COUNT(DISTINCT CASE WHEN user_id IS NOT NULL THEN COALESCE(connection_id,event_id) END) linked_connections, ' .
+                'COUNT(DISTINCT CASE WHEN route_id IS NOT NULL OR route_tag IS NOT NULL THEN COALESCE(connection_id,event_id) END) route_identified_connections, ' .
+                'COALESCE(SUM(upload_bytes),0) upload_bytes, ' .
+                'COALESCE(SUM(download_bytes),0) download_bytes, ' .
+                'MAX(occurred_at) last_event_at'
+            )
+            ->groupBy('node_id');
+
+        $eventNodes = $query->get()->keyBy(fn ($row) => (string) $row->node_id);
+        $servers = Server::query()
+            ->where(function ($q): void {
+                $q->whereNull('parent_id')->orWhere('parent_id', 0);
+            })
+            ->where(function ($q): void {
+                $q->whereNull('enabled')->orWhere('enabled', true);
+            })
+            ->when(!empty($filters['node_id']) && ctype_digit((string) $filters['node_id']), fn ($q) => $q->where('id', (int) $filters['node_id']))
+            ->orderBy('sort')
+            ->orderBy('id')
+            ->get(['id', 'name', 'type', 'machine_id']);
+
+        $now = now()->utc();
+        $rows = $servers->map(function (Server $server) use ($eventNodes, $now): array {
+            $nodeId = (string) $server->id;
+            $event = $eventNodes->get($nodeId);
+            $connections = (int) ($event->connections ?? 0);
+            $linked = (int) ($event->linked_connections ?? 0);
+            $routeIdentified = (int) ($event->route_identified_connections ?? 0);
+            $lastEventAt = $event->last_event_at ?? null;
+
+            if (!$lastEventAt) {
+                $status = 'no_events';
+                $statusLabel = '所选时段无事件';
+            } else {
+                $lastEventUtc = CarbonImmutable::parse((string) $lastEventAt, 'UTC')->utc();
+                $ageSeconds = max(0, $now->diffInSeconds($lastEventUtc, false) * -1);
+                if ($ageSeconds <= 900) {
+                    $status = 'healthy';
+                    $statusLabel = '正常';
+                } elseif ($ageSeconds <= 21600) {
+                    $status = 'delayed';
+                    $statusLabel = '延迟';
+                } else {
+                    $status = 'stale';
+                    $statusLabel = '长时间无事件';
+                }
+            }
+
+            return [
+                'node_id' => $nodeId,
+                'node_name' => $server->name,
+                'protocol' => $server->type,
+                'machine_id' => $server->machine_id,
+                'last_event_at' => $lastEventAt,
+                'events' => (int) ($event->events ?? 0),
+                'connections' => $connections,
+                'linked_connections' => $linked,
+                'unlinked_connections' => max(0, $connections - $linked),
+                'user_link_rate' => $connections > 0 ? round($linked * 100 / $connections, 1) : null,
+                'route_identified_connections' => $routeIdentified,
+                'route_missing_connections' => max(0, $connections - $routeIdentified),
+                'route_identity_rate' => $connections > 0 ? round($routeIdentified * 100 / $connections, 1) : null,
+                'upload_bytes' => (int) ($event->upload_bytes ?? 0),
+                'download_bytes' => (int) ($event->download_bytes ?? 0),
+                'health_status' => $status,
+                'health_label' => $statusLabel,
+            ];
+        })->values();
+
+        $connections = $rows->sum('connections');
+        $linked = $rows->sum('linked_connections');
+        $routeIdentified = $rows->sum('route_identified_connections');
+        $statusCounts = $rows->countBy('health_status');
+
+        return [
+            'from' => $from->toIso8601String(),
+            'to' => $to->toIso8601String(),
+            'summary' => [
+                'nodes' => $rows->count(),
+                'healthy' => (int) ($statusCounts['healthy'] ?? 0),
+                'delayed' => (int) ($statusCounts['delayed'] ?? 0),
+                'stale' => (int) ($statusCounts['stale'] ?? 0),
+                'no_events' => (int) ($statusCounts['no_events'] ?? 0),
+                'connections' => $connections,
+                'user_link_rate' => $connections > 0 ? round($linked * 100 / $connections, 1) : null,
+                'route_identity_rate' => $connections > 0 ? round($routeIdentified * 100 / $connections, 1) : null,
+            ],
+            'nodes' => $rows->all(),
         ];
     }
 

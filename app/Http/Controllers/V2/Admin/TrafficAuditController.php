@@ -20,6 +20,7 @@ class TrafficAuditController extends Controller
         $filters = $this->filters($request);
         $data = $this->service->overview($filters);
         $platform = $this->service->platformTraffic($filters);
+        $health = $this->service->health($filters);
         $usePlatformTraffic = empty($filters['destination'])
             && empty($filters['action'])
             && empty($filters['route_id']);
@@ -28,7 +29,12 @@ class TrafficAuditController extends Controller
         $eventNodes = collect($data['nodes'])->keyBy('node_id');
         $platformNodes = collect($platform['nodes'])->keyBy('node_id');
         $userIdList = $eventUsers->keys()->merge($platformUsers->keys())->unique()->filter()->values();
-        $nodeIdList = $eventNodes->keys()->merge($platformNodes->keys())->unique()->filter()->values();
+        $nodeIdList = $eventNodes->keys()
+            ->merge($platformNodes->keys())
+            ->merge(collect($health['nodes'])->pluck('node_id'))
+            ->unique()
+            ->filter()
+            ->values();
 
         $routeNames = ServerRoute::query()
             ->whereIn('id', collect($data['routes'])->pluck('route_id')->filter()->all())
@@ -56,6 +62,7 @@ class TrafficAuditController extends Controller
             'blocked_events' => $data['audit_cards']['blocked_events'],
         ];
         $data['platform'] = $platform;
+        $data['health'] = $health;
         $data['nodes'] = $nodeIdList->map(function ($nodeId) use ($eventNodes, $platformNodes, $nodeNames, $usePlatformTraffic) {
             $event = (array) ($eventNodes->get($nodeId) ?? []);
             $traffic = (array) ($platformNodes->get($nodeId) ?? []);
