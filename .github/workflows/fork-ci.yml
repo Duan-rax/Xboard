@@ -54,6 +54,10 @@ jobs:
           php -l app/WebSocket/NodeEventHandlers.php
           php -l app/Http/Controllers/V2/Admin/Server/RouteController.php
           php -l app/Http/Routes/V2/AdminRoute.php
+          php -l app/Http/Controllers/V1/TrafficAuditIngestController.php
+          php -l app/Http/Controllers/V2/Admin/TrafficAuditController.php
+          php -l app/Services/TrafficAudit/TrafficAuditService.php
+          php -l database/migrations/2026_10_31_000001_create_traffic_audit_events_table.php
 
       - name: Check JavaScript extension
         run: |
@@ -72,6 +76,12 @@ jobs:
           node --check public/assets/route-admin-api.js
           node --check public/assets/route-admin.js
           node tests/js/route-admin.test.js
+          node --check public/assets/security-audit-adapter.js
+          node --check public/assets/security-audit-state.js
+          node --check public/assets/security-audit-api.js
+          node --check public/assets/security-audit-view.js
+          node --check public/assets/security-audit.js
+          node tests/js/security-audit.test.js
 
       - name: Set up Go for egress probe
         uses: actions/setup-go@v5
@@ -89,3 +99,7 @@ jobs:
           vendor/bin/phpunit --filter EgressProxyValidatorTest tests/Unit/Services/EgressProxyValidatorTest.php
           vendor/bin/phpunit --filter RouteRuleValidatorTest tests/Unit/Services/RouteRuleValidatorTest.php
           vendor/bin/phpunit --filter NodeCapabilityServiceTest tests/Unit/Services/NodeCapabilityServiceTest.php
+          mkdir -p tmp
+          touch tmp/traffic-audit.sqlite
+          DB_CONNECTION=sqlite DB_DATABASE=tmp/traffic-audit.sqlite CACHE_STORE=array SESSION_DRIVER=array \
+            vendor/bin/phpunit --filter TrafficAuditServiceTest tests/Unit/Services/TrafficAuditServiceTest.php
