@@ -126,12 +126,11 @@ class MachineController extends Controller
             $secret = bin2hex(random_bytes(24));
             admin_setting(['traffic_audit_webhook_secret' => $secret]);
         }
-
         return response()->json(
             [
                 'enabled' => true,
                 'machine_id' => $machine->id,
-                'panel_event_url' => url('/api/v1/traffic-audit/events'),
+                'panel_event_path' => '/api/v1/traffic-audit/events',
                 'webhook_secret' => $secret,
                 'singbox_audit_api_base_port' => 19090,
                 'audit_manifest_path' => '/etc/xboard-node/traffic-audit-targets.json',
