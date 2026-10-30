@@ -940,11 +940,26 @@
     state.pageHost = null;
   };
 
-  const openIfCurrentRoute = () => {
-    const path = String(window.location?.pathname || '');
-    if (/\/server\/route(?:[/?#]|$)/.test(path) && !page()) {
-      void open();
+  const isCurrentRoute = () => /\/server\/route(?:[/?#]|$)/.test(String(window.location?.pathname || ''));
+
+  const updateRouteLocation = (href) => {
+    if (!window.history?.pushState || !window.location) return;
+    try {
+      const target = new URL(href, window.location.href || 'http://localhost/');
+      const next = `${target.pathname}${target.search}${target.hash}`;
+      const current = `${window.location.pathname || ''}${window.location.search || ''}${window.location.hash || ''}`;
+      if (next !== current) window.history.pushState({}, '', next);
+    } catch (_) {
+      // The native menu supplied an invalid URL; opening the editor still works.
     }
+  };
+
+  const openIfCurrentRoute = () => {
+    if (isCurrentRoute()) {
+      if (!page()) void open();
+      return;
+    }
+    if (page()) close();
   };
 
   document.addEventListener('click', (event) => {
@@ -954,6 +969,7 @@
       if (/\/server\/route(?:[/?#]|$)/.test(href)) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        updateRouteLocation(href);
         void open();
         return;
       }
