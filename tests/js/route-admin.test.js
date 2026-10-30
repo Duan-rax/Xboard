@@ -59,9 +59,24 @@ content.insertAdjacentHTML = (position, html) => {
   if (html.includes('xboard-route-v2-page')) inserted = true;
 };
 
+let pushedLocation = '';
+const windowListeners = {};
 global.window = {
   settings: { secure_path: 'test' },
-  addEventListener() {},
+  location: {
+    href: 'https://panel.test/server/manage',
+    pathname: '/server/manage',
+    search: '',
+    hash: '',
+  },
+  history: {
+    pushState(_state, _title, url) {
+      pushedLocation = String(url);
+      window.location.pathname = new URL(url, window.location.href).pathname;
+      window.location.href = new URL(url, window.location.href).href;
+    },
+  },
+  addEventListener(name, listener) { windowListeners[name] = listener; },
 };
 const tokenStore = {
   panel_theme_access_token: JSON.stringify({ value: 'token-123' }),
@@ -130,6 +145,7 @@ async function verify() {
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(inserted, true, 'route link must open the embedded structured page');
+  assert.equal(pushedLocation, '/server/route', 'route click must keep browser history in sync');
   assert.match(style.textContent, /xe-layout/);
   assert.equal(existingContent.style.display, 'none');
   assert.equal(routeLink['aria-current'], 'page');
