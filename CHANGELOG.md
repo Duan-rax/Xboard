@@ -32,6 +32,9 @@ Release: `v2026.10.30.4`
   instead of accidentally matching a substring.
 - Custom sing-box rule-set and experimental settings merge without losing the
   generated remote-rule cache.
+- Route management accepts the current admin session token regardless of the
+  theme-specific `*_access_token` localStorage key, so existing routes no
+  longer disappear behind an `Unauthorized` response.
 
 ## 2026.10.30.2
 

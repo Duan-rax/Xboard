@@ -63,28 +63,37 @@ global.window = {
   settings: { secure_path: 'test' },
   addEventListener() {},
 };
-global.localStorage = {
-  getItem: () => null,
+const tokenStore = {
+  panel_theme_access_token: JSON.stringify({ value: 'token-123' }),
 };
-global.fetch = async (url) => ({
-  ok: true,
-  status: 200,
-  json: async () => ({
-    data: String(url).includes('/options')
-      ? { targets: [{ tag: 'warp', label: 'WARP (warp)' }] }
-      : [{
-          id: 7,
-          remarks: '国内直连',
-          criteria: { domain_suffixes: ['example.cn'] },
-          match_mode: 'any',
-          priority: 10,
-          enabled: true,
-          action: 'direct',
-          action_value: null,
-          servers_count: 2,
-        }],
-  }),
-});
+global.localStorage = {
+  get length() { return Object.keys(tokenStore).length; },
+  key: (index) => Object.keys(tokenStore)[index] || null,
+  getItem: (key) => tokenStore[key] ?? null,
+};
+let authorizationHeader = '';
+global.fetch = async (url, options = {}) => {
+  authorizationHeader = options.headers?.Authorization || authorizationHeader;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: String(url).includes('/options')
+        ? { targets: [{ tag: 'warp', label: 'WARP (warp)' }] }
+        : [{
+            id: 7,
+            remarks: '国内直连',
+            criteria: { domain_suffixes: ['example.cn'] },
+            match_mode: 'any',
+            priority: 10,
+            enabled: true,
+            action: 'direct',
+            action_value: null,
+            servers_count: 2,
+          }],
+    }),
+  };
+};
 global.document = {
   head: { appendChild: (element) => { style = element; } },
   createElement: () => createElement(),
@@ -124,6 +133,7 @@ async function verify() {
   assert.match(style.textContent, /xe-layout/);
   assert.equal(existingContent.style.display, 'none');
   assert.equal(routeLink['aria-current'], 'page');
+  assert.equal(authorizationHeader, 'Bearer token-123');
   assert.match(elements.get('xe-list').innerHTML, /国内直连/);
   assert.match(elements.get('xe-list').innerHTML, /绑定节点/);
   assert.match(elements.get('xe-list').innerHTML, /停用/);

@@ -50,13 +50,21 @@
   };
 
   const authToken = () => {
-    for (const key of ['Xboard_access_token', 'Vue_Naive_access_token', 'access_token']) {
-      try {
+    const keys = ['Xboard_access_token', 'Vue_Naive_access_token', 'access_token'];
+    try {
+      for (const key of keys) {
         const token = parseStoredToken(localStorage.getItem(key));
         if (token) return token;
-      } catch (_) {
-        // localStorage may be unavailable.
       }
+      const length = Number(localStorage.length) || 0;
+      for (let i = 0; i < length; i += 1) {
+        const key = localStorage.key(i) || '';
+        if (!/access_token$/i.test(key)) continue;
+        const token = parseStoredToken(localStorage.getItem(key));
+        if (token) return token;
+      }
+    } catch (_) {
+      // localStorage can be unavailable in hardened browsers.
     }
     return '';
   };
