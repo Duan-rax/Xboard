@@ -181,7 +181,7 @@ async function verify() {
     preventDefault() {},
     stopImmediatePropagation() {},
   });
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setTimeout(resolve, 80));
 
   assert.equal(inserted, true, 'route link must open the embedded structured page');
   assert.equal(pushedLocation, '/server/route', 'route click must keep browser history in sync');

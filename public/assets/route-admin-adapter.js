@@ -219,7 +219,10 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         updateRouteLocation(href);
-        onRoute();
+        // Let the official router finish its own content re-render before
+        // mounting the extension. Mounting in this event stack causes React/
+        // Vue to remove the new page immediately after insertion.
+        setTimeout(onRoute, 50);
         return;
       }
       if (page() && !link.closest(`#${PAGE_ID}`)) onClose();
