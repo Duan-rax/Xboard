@@ -45,20 +45,10 @@
     ['users', '用户审计'],
     ['settings', '审计设置'],
   ];
-  const BUTTON_BASE = 'inline-flex items-center gap-2 whitespace-nowrap text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
-  const GROUP_BASE = `${BUTTON_BASE} group h-12 w-full justify-start rounded-none px-6`;
-  const SUBLINK_BASE = `${BUTTON_BASE} h-10 w-full justify-start text-wrap rounded-none border-l border-l-slate-500 px-2`;
   const ACTIVE_VARIANT = ['bg-secondary', 'text-secondary-foreground', 'shadow-sm', 'hover:bg-secondary/80'];
   const INACTIVE_VARIANT = ['hover:bg-accent', 'hover:text-accent-foreground'];
   const MENU_CSS = `
-    .sa-nav-group{list-style:none;width:100%}
-    .sa-nav-toggle,.sa-nav-sub-link{font-size:.75rem;line-height:1rem}
-    .sa-nav-toggle svg,.sa-nav-sub-link svg{width:1rem;height:1rem}
-    .sa-nav-sub{list-style:none;margin:0;padding:0}
     .sa-nav-sub[hidden]{display:none}
-    [data-collapsed="true"] .sa-nav-group .sa-nav-toggle{width:3rem;padding:0;justify-content:center}
-    [data-collapsed="true"] .sa-nav-group .sa-nav-toggle>span{display:none}
-    [data-collapsed="true"] .sa-nav-group .sa-nav-sub{display:none!important}
   `;
 
   let menuLink = null;
@@ -230,8 +220,7 @@
     ensureStyle(MENU_CSS, MENU_STYLE_ID);
     const existing = get(MENU_ID);
     if (existing) {
-      menuLink = existing.matches('a') ? existing : existing.querySelector('a[href]');
-      menuLink = menuLink || existing.querySelector('.sa-nav-toggle');
+      menuLink = existing.matches('a') ? existing : existing.querySelector('button');
       sectionLinks = [...existing.querySelectorAll('[data-sa-section]')];
       return;
     }
@@ -243,39 +232,81 @@
     const leaf = dashboard.closest('li') || dashboard;
     const list = leaf.parentElement;
     if (!list) return;
+    const templateGroup = [...list.children].find((candidate) => (
+      candidate !== leaf
+      && candidate.querySelector?.('ul a[href]')
+    ));
+    if (!templateGroup) return;
 
-    const item = document.createElement('div');
+    const item = templateGroup.cloneNode(true);
     item.id = MENU_ID;
-    item.className = 'sa-nav-group';
-    item.innerHTML = `
-      <button type="button" class="sa-nav-toggle ${GROUP_BASE} ${INACTIVE_VARIANT.join(' ')}" aria-expanded="true" data-state="open">
-        <div class="mr-2">${MENU_ICON}</div><span>${MENU_LABEL}</span>
-        <span class='ml-auto transition-all group-data-[state="open"]:-rotate-180' data-sa-toggle>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-        </span>
-      </button>
-      <ul class="sa-nav-sub" data-state="open">
-        ${MENU_SECTIONS.map(([section, label]) => `
-          <li class="my-1 ml-8">
-            <button type="button" data-sa-section="${section}" class="sa-nav-sub-link ${SUBLINK_BASE} ${INACTIVE_VARIANT.join(' ')}">
-              <span class="mr-2 inline-flex">${SECTION_ICONS[section]}</span><span>${label}</span>
-            </button>
-          </li>`).join('')}
-      </ul>`;
-    menuLink = item.querySelector('.sa-nav-toggle');
-    sectionLinks = [...item.querySelectorAll('[data-sa-section]')];
+    item.classList.add('sa-nav-group');
+    item.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
+
+    menuLink = item.querySelector('button');
+    const submenu = item.querySelector('.collapsibleDropdown') || item.querySelector('ul')?.parentElement;
+    const rowList = item.querySelector('ul');
+    const templateRows = rowList ? [...rowList.children] : [];
+    if (!menuLink || !submenu || !rowList || templateRows.length < MENU_SECTIONS.length) return;
+
+    const replaceDirectLabel = (host, label) => {
+      const labelNode = [...host.childNodes].find((node) => node.nodeType === 3 && node.nodeValue.trim());
+      if (labelNode) labelNode.nodeValue = label;
+      else host.appendChild(document.createTextNode(label));
+    };
+
+    const groupIcon = menuLink.querySelector('div');
+    if (groupIcon) groupIcon.innerHTML = MENU_ICON;
+    replaceDirectLabel(menuLink, MENU_LABEL);
+    const chevron = [...menuLink.children]
+      .find((child) => child.tagName === 'SPAN' && child.classList.contains('ml-auto'))
+      || menuLink.lastElementChild;
+    chevron?.setAttribute('data-sa-toggle', '');
+    menuLink.removeAttribute('aria-current');
+    menuLink.removeAttribute('aria-controls');
+
+    submenu.classList.remove('collapsibleDropdown');
+    submenu.removeAttribute('style');
+    submenu.classList.add('sa-nav-sub');
+    submenu.id = `${MENU_ID}-sections`;
+    menuLink.setAttribute('aria-controls', submenu.id);
+
+    while (rowList.firstChild) rowList.removeChild(rowList.firstChild);
+    MENU_SECTIONS.forEach(([section, label], index) => {
+      const row = templateRows[index].cloneNode(true);
+      const link = row.querySelector('a[href]') || row.querySelector('a');
+      if (!link) return;
+      link.setAttribute('href', '#');
+      link.removeAttribute('aria-current');
+      link.dataset.saSection = section;
+      link.innerHTML = `<div class="mr-2">${SECTION_ICONS[section]}</div>${label}`;
+      setVariant(link, false);
+      rowList.appendChild(row);
+    });
+    sectionLinks = [...rowList.querySelectorAll('[data-sa-section]')];
+
     let expanded = true;
     const setExpanded = (value) => {
       expanded = value;
       menuLink.setAttribute('data-state', expanded ? 'open' : 'closed');
       menuLink.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-      const submenu = item.querySelector('.sa-nav-sub');
       submenu.hidden = !expanded;
       submenu.setAttribute('data-state', expanded ? 'open' : 'closed');
     };
-    menuLink.addEventListener('click', (event) => {
+    item.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
+      const sectionLink = event.target.closest?.('[data-sa-section]');
+      if (sectionLink) {
+        restoreAttempted = true;
+        try {
+          sessionStorage.setItem(INTENT_KEY, '1');
+          sessionStorage.setItem(SECTION_KEY, sectionLink.dataset.saSection);
+        } catch (_) {}
+        setExpanded(true);
+        onOpen(sectionLink.dataset.saSection);
+        return;
+      }
       if (event.target.closest?.('[data-sa-toggle]')) {
         setExpanded(!expanded);
         return;
@@ -289,20 +320,9 @@
         sessionStorage.setItem(SECTION_KEY, section);
       } catch (_) {}
       onOpen(section);
-    });
-    sectionLinks.forEach((sectionLink) => {
-      sectionLink.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        restoreAttempted = true;
-        try {
-          sessionStorage.setItem(INTENT_KEY, '1');
-          sessionStorage.setItem(SECTION_KEY, sectionLink.dataset.saSection);
-        } catch (_) {}
-        setExpanded(true);
-        onOpen(sectionLink.dataset.saSection);
-      });
-    });
+    }, true);
+    setExpanded(true);
+    setVariant(menuLink, false);
     leaf.insertAdjacentElement('afterend', item);
   };
 

@@ -80,43 +80,90 @@ elements.get('sa-range').value = '24h';
 elements.get('sa-action').value = '';
 
 const list = element();
+const groupLabelNode = { nodeType: 3, nodeValue: '系统管理' };
+const groupIcon = element({ tag: 'DIV' });
+const groupChevron = element({ tag: 'SPAN', className: 'ml-auto transition-all' });
+const menuLink = element({
+  tag: 'BUTTON',
+  className: 'official-group-button group h-12 w-full justify-start rounded-none px-6 text-xs',
+  childNodes: [groupIcon, groupLabelNode, groupChevron],
+  children: [groupIcon, groupChevron],
+  listeners: {},
+});
+menuLink.lastElementChild = groupChevron;
+menuLink.querySelector = (selector) => selector === 'div' ? groupIcon : null;
+menuLink.closest = () => null;
+
+const submenu = element({ tag: 'DIV', className: 'official-content collapsibleDropdown' });
+const rowList = element({ tag: 'UL' });
+rowList.children = [];
+Object.defineProperty(rowList, 'firstChild', {
+  get() { return this.children[0] || null; },
+});
+rowList.removeChild = function removeChild(child) {
+  this.children = this.children.filter((value) => value !== child);
+};
+rowList.appendChild = function appendChild(child) {
+  this.children.push(child);
+};
+rowList.querySelectorAll = function querySelectorAll(selector) {
+  const links = selector === '[data-sa-section]'
+  ? this.children.map((row) => row._link).filter((link) => link?.dataset.saSection)
+  : [];
+  if (selector === '[data-sa-section]') {
+    sectionLinks.splice(0, sectionLinks.length, ...links);
+  }
+  return links;
+};
+
+const makeTemplateRow = () => {
+  const link = element({
+    tag: 'A',
+    className: 'official-sub-link text-xs border-l border-l-slate-500 h-10 w-full',
+  });
+  Object.defineProperty(link, 'innerHTML', {
+    set(markup) {
+      this._html = markup;
+      const match = String(markup).match(/<\/div>([^<]+)$/);
+      this.textContent = match ? match[1] : '';
+    },
+    get() {
+      return this._html || '';
+    },
+  });
+  link.closest = (selector) => selector === '[data-sa-section]' && link.dataset.saSection
+    ? link
+    : null;
+  const row = element({ tag: 'LI', _link: link });
+  row.querySelector = (selector) => selector === 'a[href]' || selector === 'a' ? link : null;
+  row.cloneNode = () => makeTemplateRow();
+  return row;
+};
+for (let index = 0; index < 6; index += 1) rowList.appendChild(makeTemplateRow());
+
 const menu = element({
   matches() { return false; },
+  listeners: {},
 });
 menu.querySelector = (selector) => {
-  if (selector === '.sa-nav-toggle') return menu._toggle;
-  if (selector === '.sa-nav-sub') return menu._submenu;
+  if (selector === 'button') return menuLink;
+  if (selector === '.collapsibleDropdown') return submenu;
+  if (selector === 'ul') return rowList;
   return null;
 };
-menu.querySelectorAll = (selector) => selector === '[data-sa-section]' ? sectionLinks : [];
+menu.querySelectorAll = (selector) => selector === '[data-sa-section]'
+  ? rowList.querySelectorAll('[data-sa-section]')
+  : [];
+menu.addEventListener = (name, listener) => {
+  menu.listeners[name] = listener;
+};
 
-Object.defineProperty(menu, 'innerHTML', {
-  set(markup) {
-    this._html = markup;
-    const toggleMatch = markup.match(/<button type="button" class="([^"]+)" aria-expanded="true" data-state="open">/);
-    const toggle = element({
-      className: toggleMatch?.[1] || 'sa-nav-toggle',
-      parentElement: menu,
-    });
-    toggle.closest = (selector) => selector === '[data-sa-toggle]' ? null : null;
-    const submenu = element({ className: 'sa-nav-sub collapsibleDropdown', parentElement: menu });
-    submenu.querySelectorAll = (selector) => selector === '[data-sa-section]' ? sectionLinks : [];
-    sectionLinks.splice(0, sectionLinks.length);
-    const sectionPattern = /<button type="button" data-sa-section="([^"]+)" class="([^"]+)">[\s\S]*?<span>([^<]+)<\/span>\s*<\/button>/g;
-    for (const match of markup.matchAll(sectionPattern)) {
-      const link = element({
-        className: match[2],
-        textContent: match[3],
-        parentElement: submenu,
-      });
-      link.dataset.saSection = match[1];
-      sectionLinks.push(link);
-    }
-    this._toggle = toggle;
-    this._submenu = submenu;
+const templateGroup = element({
+  querySelector(selector) {
+    return selector === 'ul a[href]' ? true : null;
   },
-  get() {
-    return this._html || '';
+  cloneNode() {
+    return menu;
   },
 });
 
@@ -136,6 +183,7 @@ const dashboard = element({
 dashboard.attributes['aria-current'] = 'page';
 dashboard.getAttribute = (name) => name === 'href' ? '#/dashboard' : dashboard.attributes[name];
 dashboard.closest = (selector) => selector === 'li' ? dashboardItem : null;
+list.children = [dashboardItem, templateGroup];
 
 global.window = {
   settings: { secure_path: 'test' },
@@ -163,8 +211,10 @@ global.document = {
     },
   },
   createElement(tag) {
-    if (tag === 'div') return menu;
     return element({ tag });
+  },
+  createTextNode(value) {
+    return { nodeType: 3, nodeValue: String(value) };
   },
   getElementById(id) {
     if (id === 'xboard-security-audit-page') return inserted ? page : null;
@@ -228,24 +278,25 @@ async function verify() {
   migrationCallback();
   assert.equal(menuInserted, true);
   assert.equal(menu.id, 'xboard-security-audit-menu');
-  assert.match(menu.innerHTML, /安全审计/);
+  assert.equal(groupLabelNode.nodeValue, '安全审计');
   assert.equal(sectionLinks.length, 5);
   assert.deepEqual(sectionLinks.map((link) => link.textContent), ['审计概览', '流量明细', '规则命中', '用户审计', '审计设置']);
-  assert.match(menu.innerHTML, /my-1 ml-8/);
-  assert.match(menu.innerHTML, /border-l-slate-500/);
-  assert.match(menu.innerHTML, /text-xs/);
+  assert.equal(menu.classList.contains('sa-nav-group'), true);
+  assert.equal(submenu.id, 'xboard-security-audit-menu-sections');
+  assert.equal(menuLink.attributes['aria-controls'], submenu.id);
+  assert.match(sectionLinks[0].className, /border-l-slate-500/);
+  assert.match(sectionLinks[0].className, /text-xs/);
   assert.match(styles.get('xboard-security-audit-menu-style').textContent, /sa-nav-sub\[hidden\]/);
-  assert.match(styles.get('xboard-security-audit-menu-style').textContent, /font-size:\.75rem/);
 
-  const menuClick = menu._toggle.listeners.click;
+  const menuClick = menu.listeners.click;
   assert.equal(typeof menuClick, 'function');
-  menuClick({ preventDefault() {}, stopPropagation() {}, target: menu._toggle });
+  menuClick({ preventDefault() {}, stopPropagation() {}, target: menuLink });
   await flush();
   assert.equal(inserted, true);
   assert.equal(native.style.display, 'none');
-  assert.equal(menu._toggle.attributes['aria-current'], 'page');
-  assert.equal(menu._toggle.classList.contains('active'), true);
-  assert.equal(menu._toggle.classList.contains('bg-secondary'), true);
+  assert.equal(menuLink.attributes['aria-current'], 'page');
+  assert.equal(menuLink.classList.contains('active'), true);
+  assert.equal(menuLink.classList.contains('bg-secondary'), true);
   assert.equal(dashboard.attributes['aria-current'], undefined);
   assert.equal(panels.find((panel) => panel.dataset.saPanel === 'overview').hidden, false);
   assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
@@ -254,7 +305,7 @@ async function verify() {
   assert.equal(sessionValues.get('xboard_security_audit_section'), 'overview');
 
   const rules = sectionLinks.find((link) => link.dataset.saSection === 'rules');
-  rules.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  menuClick({ preventDefault() {}, stopPropagation() {}, target: rules });
   await flush();
   assert.equal(panels.find((panel) => panel.dataset.saPanel === 'rules').hidden, false);
   assert.equal(panels.filter((panel) => !panel.hidden).length, 1);
@@ -276,7 +327,7 @@ async function verify() {
   assert.match(elements.get('sa-page-info').textContent, /共 73 条/);
 
   const settings = sectionLinks.find((link) => link.dataset.saSection === 'settings');
-  settings.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  menuClick({ preventDefault() {}, stopPropagation() {}, target: settings });
   await flush();
   assert.equal(filterToolbar.hidden, true);
   assert.equal(elements.get('sa-secret').value, 'secret');
