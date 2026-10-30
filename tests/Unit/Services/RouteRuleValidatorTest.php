@@ -102,4 +102,12 @@ class RouteRuleValidatorTest extends TestCase
             'domain_regexes' => ['example++'],
         ]);
     }
+
+    public function test_rejects_nested_criteria_values(): void
+    {
+        $this->expectException(ValidationException::class);
+        RouteRuleValidator::normalizeCriteria([
+            'domains' => [['example.com']],
+        ]);
+    }
 }
