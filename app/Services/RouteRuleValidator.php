@@ -14,6 +14,9 @@ class RouteRuleValidator
         'networks',
         'source_cidrs',
         'source_ports',
+        'geoip',
+        'geosite',
+        'rule_sets',
     ];
 
     public static function normalizeCriteria(array $raw): array
@@ -50,6 +53,18 @@ class RouteRuleValidator
         $criteria['networks'] = array_map(
             fn ($value) => self::normalizeNetwork($value),
             $criteria['networks']
+        );
+        $criteria['geoip'] = array_map(
+            fn ($value) => self::normalizeGeoCode($value, 'geoip'),
+            $criteria['geoip']
+        );
+        $criteria['geosite'] = array_map(
+            fn ($value) => self::normalizeGeoCode($value, 'geosite'),
+            $criteria['geosite']
+        );
+        $criteria['rule_sets'] = array_map(
+            fn ($value) => self::normalizeRuleSetTag($value),
+            $criteria['rule_sets']
         );
 
         foreach ($criteria as $key => $values) {
@@ -177,6 +192,35 @@ class RouteRuleValidator
         if (!in_array($value, ['tcp', 'udp'], true)) {
             throw ValidationException::withMessages([
                 'criteria' => ["网络类型只支持 tcp 或 udp：{$value}"],
+            ]);
+        }
+        return $value;
+    }
+
+    private static function normalizeGeoCode(string $value, string $kind): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/^' . preg_quote($kind, '/') . '[:-]/', '', $value);
+        if ($kind === 'geoip' && str_ends_with((string) $value, '_ip')) {
+            $value = substr((string) $value, 0, -3);
+        }
+        if ($kind === 'geosite' && str_ends_with((string) $value, '_site')) {
+            $value = substr((string) $value, 0, -5);
+        }
+        if ($value === '' || strlen((string) $value) > 128 || !preg_match('/^[a-z0-9_!@.+-]+$/', (string) $value)) {
+            throw ValidationException::withMessages([
+                'criteria' => [strtoupper($kind) . " 规则集名称不正确：{$value}"],
+            ]);
+        }
+        return (string) $value;
+    }
+
+    private static function normalizeRuleSetTag(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || strlen($value) > 128 || !preg_match('/^[A-Za-z0-9_!@.:+-]+$/', $value)) {
+            throw ValidationException::withMessages([
+                'criteria' => ["sing-box Rule Set Tag 不正确：{$value}"],
             ]);
         }
         return $value;

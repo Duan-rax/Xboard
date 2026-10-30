@@ -18,6 +18,9 @@ class RouteRuleValidatorTest extends TestCase
             'networks' => ['TCP'],
             'source_cidrs' => ['10.0.0.0/8'],
             'source_ports' => ['1000-2000'],
+            'geoip' => ['geoip:CN', 'cn_ip'],
+            'geosite' => ['geosite:CN', 'category-ads-all'],
+            'rule_sets' => ['cn_ip'],
         ]);
 
         $this->assertSame(['api.example.com'], $criteria['domains']);
@@ -25,6 +28,9 @@ class RouteRuleValidatorTest extends TestCase
         $this->assertSame(['1.1.1.1/24', '2001:db8::/32'], $criteria['ip_cidrs']);
         $this->assertSame(['443', '8000-8010'], $criteria['ports']);
         $this->assertSame(['tcp'], $criteria['networks']);
+        $this->assertSame(['cn'], $criteria['geoip']);
+        $this->assertSame(['cn', 'category-ads-all'], $criteria['geosite']);
+        $this->assertSame(['cn_ip'], $criteria['rule_sets']);
         $this->assertTrue(RouteRuleValidator::hasCriteria($criteria));
     }
 
@@ -57,5 +63,13 @@ class RouteRuleValidatorTest extends TestCase
             'proxy',
             null
         );
+    }
+
+    public function test_rejects_unsafe_rule_set_tag(): void
+    {
+        $this->expectException(ValidationException::class);
+        RouteRuleValidator::normalizeCriteria([
+            'rule_sets' => ['../../config.json'],
+        ]);
     }
 }

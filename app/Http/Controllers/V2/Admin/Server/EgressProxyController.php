@@ -284,6 +284,7 @@ class EgressProxyController extends Controller
             }
         });
         $requestedAt = time();
+        $this->clearAppliedConfig($changedIds);
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
@@ -334,6 +335,7 @@ class EgressProxyController extends Controller
             }
         });
         $requestedAt = time();
+        $this->clearAppliedConfig($changedIds);
         $this->notifyNodeConfigs($changedIds);
 
         return $this->success([
@@ -414,6 +416,13 @@ class EgressProxyController extends Controller
     {
         foreach ($serverIds as $serverId) {
             NodeSyncService::notifyConfigUpdated((int) $serverId);
+        }
+    }
+
+    private function clearAppliedConfig(iterable $serverIds): void
+    {
+        foreach ($serverIds as $serverId) {
+            Cache::forget("node_config_applied:" . (int) $serverId);
         }
     }
 

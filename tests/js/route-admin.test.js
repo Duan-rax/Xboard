@@ -50,6 +50,8 @@ const elements = new Map();
   'xe-enabled', 'xe-domains', 'xe-domain-suffixes', 'xe-ip-cidrs', 'xe-ports',
   'xe-networks', 'xe-source-cidrs', 'xe-source-ports', 'xe-action', 'xe-target',
   'xe-target-options', 'xe-message', 'xe-preview', 'xe-list', 'xe-search',
+  'xe-bind-modal', 'xe-bind-title', 'xe-node-search', 'xe-node-bound',
+  'xe-bind-message', 'xe-node-list', 'xe-node-page',
 ].forEach((id) => elements.set(id, createElement()));
 
 content.insertAdjacentHTML = (position, html) => {
@@ -123,6 +125,8 @@ async function verify() {
   assert.equal(existingContent.style.display, 'none');
   assert.equal(routeLink['aria-current'], 'page');
   assert.match(elements.get('xe-list').innerHTML, /国内直连/);
+  assert.match(elements.get('xe-list').innerHTML, /绑定节点/);
+  assert.match(elements.get('xe-list').innerHTML, /停用/);
   assert.match(elements.get('xe-target-options').innerHTML, /warp/);
 
   const otherLink = createElement({

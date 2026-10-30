@@ -6,10 +6,14 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Server;
 use App\Models\ServerRoute;
+use App\Services\NodeSyncService;
 use App\Services\RouteRuleValidator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class RouteController extends Controller
 {
@@ -36,14 +40,14 @@ class RouteController extends Controller
     public function save(Request $request)
     {
         $params = $request->validate([
-            'remarks' => 'required',
+            'remarks' => 'required|string|max:255',
             'match' => 'nullable|array',
             'criteria' => 'nullable|array',
             'match_mode' => 'nullable|in:any,all',
             'priority' => 'nullable|integer|min:0|max:100000',
             'enabled' => 'nullable|boolean',
             'action' => 'required|in:block,direct,dns,proxy',
-            'action_value' => 'nullable'
+            'action_value' => 'nullable|string|max:255'
         ], [
             'remarks.required' => '备注不能为空',
             'action.required' => '动作类型不能为空',
@@ -70,6 +74,7 @@ class RouteController extends Controller
             try {
                 $route = ServerRoute::findOrFail($request->input('id'));
                 $route->update($params);
+                $this->notifyNodeConfigs($this->boundServerIds([(int) $route->id]));
                 return $this->success($route->fresh());
             } catch (\Exception $e) {
                 Log::error($e);
@@ -91,34 +96,184 @@ class RouteController extends Controller
             'items.*.id' => 'required|integer|min:1',
             'items.*.priority' => 'required|integer|min:0|max:100000',
         ]);
-        DB::transaction(function () use ($params) {
+        $changedRouteIds = [];
+        DB::transaction(function () use ($params, &$changedRouteIds) {
             foreach ($params['items'] as $item) {
                 $route = ServerRoute::find($item['id']);
                 if ($route && $route->priority !== (int) $item['priority']) {
                     $route->priority = (int) $item['priority'];
                     $route->save();
+                    $changedRouteIds[] = (int) $route->id;
                 }
             }
         });
+        if ($changedRouteIds !== []) {
+            $this->notifyNodeConfigs($this->boundServerIds($changedRouteIds));
+        }
         return $this->success(true);
     }
 
     public function options()
     {
         $targets = [];
-        foreach (Server::query()->whereNotNull('custom_outbounds')->pluck('custom_outbounds') as $outbounds) {
-            foreach ($outbounds ?: [] as $outbound) {
+        foreach (Server::query()->select(['id', 'custom_outbounds'])->whereNotNull('custom_outbounds')->get() as $server) {
+            foreach ($server->custom_outbounds ?: [] as $outbound) {
                 $tag = trim((string) ($outbound['tag'] ?? ''));
-                if ($tag !== '') $targets[$tag] = $tag;
+                if ($tag === '') continue;
+                $targets[$tag] ??= ['label' => $tag, 'server_ids' => []];
+                $targets[$tag]['server_ids'][] = (int) $server->id;
             }
         }
         ksort($targets);
         return $this->success([
-            'targets' => collect($targets)->map(fn ($label, $tag) => [
+            'targets' => collect($targets)->map(fn ($target, $tag) => [
                 'tag' => $tag,
-                'label' => $label,
+                'label' => $target['label'],
+                'server_count' => count(array_unique($target['server_ids'])),
             ])->values(),
         ]);
+    }
+
+    /** Paginated node picker for attaching a route group to existing nodes. */
+    public function nodes(Request $request)
+    {
+        $params = $request->validate([
+            'route_id' => 'required|integer|min:1|exists:v2_server_route,id',
+            'page' => 'nullable|integer|min:1',
+            'page_size' => 'nullable|integer|between:1,100',
+            'search' => 'nullable|string|max:128',
+            'bound' => 'nullable|in:all,bound,unbound',
+        ]);
+        $route = ServerRoute::findOrFail((int) $params['route_id']);
+        $pageSize = (int) ($params['page_size'] ?? 50);
+        $search = trim((string) ($params['search'] ?? ''));
+        $bound = $params['bound'] ?? 'all';
+        $routeId = (int) $route->id;
+
+        $query = Server::query()
+            ->select(['id', 'name', 'host', 'port', 'type', 'enabled', 'machine_id', 'route_ids', 'custom_outbounds'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('name', 'like', "%{$search}%")
+                        ->orWhere('host', 'like', "%{$search}%");
+                });
+            })
+            ->orderByDesc('id');
+
+        // JSON containment differs between MySQL and SQLite. Filter IDs in
+        // PHP first, then let the regular paginator handle the selected set.
+        if ($bound !== 'all') {
+            $matchingIds = Server::query()->select(['id', 'route_ids'])->get()
+                ->filter(function (Server $server) use ($routeId, $bound) {
+                    $contains = in_array($routeId, $this->normalizeRouteIds($server->route_ids), true);
+                    return $bound === 'bound' ? $contains : !$contains;
+                })
+                ->pluck('id');
+            $query->whereIn('id', $matchingIds);
+        }
+
+        $paginator = $query->paginate($pageSize);
+        $target = $route->action === 'proxy' ? trim((string) $route->action_value) : '';
+        return $this->success([
+            'items' => collect($paginator->items())->map(function (Server $server) use ($routeId, $target) {
+                $tags = collect($server->custom_outbounds ?: [])
+                    ->pluck('tag')->map(fn ($tag) => trim((string) $tag))->filter()->values();
+                return [
+                    'id' => (int) $server->id,
+                    'name' => $server->name,
+                    'host' => $server->host,
+                    'port' => (int) $server->port,
+                    'type' => $server->type,
+                    'enabled' => (bool) $server->enabled,
+                    'machine_id' => $server->machine_id,
+                    'bound' => in_array($routeId, $this->normalizeRouteIds($server->route_ids), true),
+                    'online' => NodeSyncService::isNodeOnline((int) $server->id),
+                    // False is a warning, not a hard rejection: a node may
+                    // define the target in its local custom_config.
+                    'target_known' => $target === '' || $tags->contains($target),
+                ];
+            })->values(),
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
+    }
+
+    /** Attach or detach one route from one or more nodes. */
+    public function bind(Request $request)
+    {
+        $params = $request->validate([
+            'route_id' => 'required|integer|min:1|exists:v2_server_route,id',
+            'server_ids' => 'required|array|min:1|max:500',
+            'server_ids.*' => 'integer|min:1|distinct',
+            'bound' => 'required|boolean',
+        ]);
+        $routeId = (int) $params['route_id'];
+        $bound = (bool) $params['bound'];
+        $ids = collect($params['server_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+        $changedIds = collect();
+
+        DB::transaction(function () use ($ids, $routeId, $bound, $changedIds) {
+            $servers = Server::query()->whereIn('id', $ids)->lockForUpdate()->get();
+            if ($servers->count() !== $ids->count()) {
+                throw ValidationException::withMessages([
+                    'server_ids' => ['存在已被删除的节点，请刷新后重试。'],
+                ]);
+            }
+            foreach ($servers as $server) {
+                $routeIds = collect($this->normalizeRouteIds($server->route_ids));
+                $before = $routeIds->all();
+                $routeIds = $bound
+                    ? $routeIds->push($routeId)->unique()->values()
+                    : $routeIds->reject(fn ($id) => $id === $routeId)->values();
+                if ($routeIds->all() === $before) continue;
+                $server->route_ids = $routeIds->all();
+                $server->save();
+                $changedIds->push((int) $server->id);
+            }
+        });
+
+        $requestedAt = time();
+        $this->clearAppliedConfig($changedIds);
+        $this->notifyNodeConfigs($changedIds);
+        return $this->success([
+            'changed' => $changedIds->count(),
+            'server_ids' => $ids,
+            'route_id' => $routeId,
+            'bound' => $bound,
+            'requested_at' => $requestedAt,
+            'sync' => $this->waitForNodeSync($changedIds, $requestedAt),
+        ]);
+    }
+
+    public function bindStatus(Request $request)
+    {
+        $params = $request->validate([
+            'server_ids' => 'required|array|max:500',
+            'server_ids.*' => 'integer|min:1|distinct',
+            'requested_at' => 'required|integer|min:1',
+        ]);
+        return $this->success([
+            'sync' => $this->waitForNodeSync($params['server_ids'], (int) $params['requested_at'], 0),
+        ]);
+    }
+
+    public function toggle(Request $request)
+    {
+        $params = $request->validate([
+            'id' => 'required|integer|min:1',
+            'enabled' => 'required|boolean',
+        ]);
+        $route = ServerRoute::findOrFail((int) $params['id']);
+        $route->enabled = (bool) $params['enabled'];
+        $route->save();
+        $serverIds = $this->boundServerIds([(int) $route->id]);
+        $this->clearAppliedConfig($serverIds);
+        $this->notifyNodeConfigs($serverIds);
+        return $this->success($route->fresh());
     }
 
     public function preview(Request $request)
@@ -152,9 +307,75 @@ class RouteController extends Controller
     {
         $route = ServerRoute::find($request->input('id'));
         if (!$route) throw new ApiException('路由不存在');
-        if (!$route->delete()) throw new ApiException('删除失败');
+        $serverIds = $this->boundServerIds([(int) $route->id]);
+        DB::transaction(function () use ($route, $serverIds) {
+            foreach (Server::query()->whereIn('id', $serverIds)->lockForUpdate()->get() as $server) {
+                $server->route_ids = collect($this->normalizeRouteIds($server->route_ids))
+                    ->reject(fn ($id) => $id === (int) $route->id)->values()->all();
+                $server->save();
+            }
+            if (!$route->delete()) throw new ApiException('删除失败');
+        });
+        $requestedAt = time();
+        $this->clearAppliedConfig($serverIds);
+        $this->notifyNodeConfigs($serverIds);
+        return $this->success([
+            'removed_bindings' => $serverIds->count(),
+            'sync' => $this->waitForNodeSync($serverIds, $requestedAt),
+        ]);
+    }
+
+    private function normalizeRouteIds(?array $routeIds): array
+    {
+        return collect($routeIds ?? [])->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)->unique()->values()->all();
+    }
+
+    private function boundServerIds(array $routeIds): Collection
+    {
+        $wanted = collect($routeIds)->map(fn ($id) => (int) $id)->flip();
+        return Server::query()->select(['id', 'route_ids'])->get()
+            ->filter(function (Server $server) use ($wanted) {
+                foreach ($this->normalizeRouteIds($server->route_ids) as $routeId) {
+                    if ($wanted->has($routeId)) return true;
+                }
+                return false;
+            })->pluck('id')->map(fn ($id) => (int) $id)->values();
+    }
+
+    private function clearAppliedConfig(iterable $serverIds): void
+    {
+        foreach ($serverIds as $serverId) {
+            Cache::forget("node_config_applied:" . (int) $serverId);
+        }
+    }
+
+    private function notifyNodeConfigs(iterable $serverIds): void
+    {
+        foreach ($serverIds as $serverId) {
+            NodeSyncService::notifyConfigUpdated((int) $serverId);
+        }
+    }
+
+    private function waitForNodeSync(iterable $serverIds, int $requestedAt, float $timeout = 3.0): array
+    {
+        $pending = collect($serverIds)->map(fn ($id) => (int) $id)->unique()->values();
+        $deadline = microtime(true) + max(0, $timeout);
+        do {
+            $pending = $pending->reject(function (int $serverId) use ($requestedAt) {
+                $applied = Cache::get("node_config_applied:{$serverId}");
+                return is_array($applied)
+                    && (int) ($applied['applied_at'] ?? 0) >= $requestedAt;
+            })->values();
+            if ($pending->isEmpty() || $timeout <= 0) break;
+            usleep(100_000);
+        } while (microtime(true) < $deadline);
+
+        $confirmed = collect($serverIds)->map(fn ($id) => (int) $id)->unique()
+            ->diff($pending)->values();
         return [
-            'data' => true
+            'confirmed_server_ids' => $confirmed,
+            'pending_server_ids' => $pending,
         ];
     }
 }
