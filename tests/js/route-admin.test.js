@@ -49,7 +49,7 @@ const elements = new Map();
   'xe-form-title', 'xe-id', 'xe-remarks', 'xe-priority', 'xe-match-mode',
   'xe-enabled', 'xe-domains', 'xe-domain-suffixes', 'xe-ip-cidrs', 'xe-ports',
   'xe-networks', 'xe-source-cidrs', 'xe-source-ports', 'xe-action', 'xe-target',
-  'xe-target-options', 'xe-message', 'xe-preview', 'xe-list', 'xe-search',
+  'xe-target-options', 'xe-message', 'xe-preview', 'xe-diagnostic-summary', 'xe-list', 'xe-search',
   'xe-bind-modal', 'xe-bind-title', 'xe-node-search', 'xe-node-bound',
   'xe-bind-message', 'xe-node-list', 'xe-node-page',
 ].forEach((id) => elements.set(id, createElement()));
@@ -105,6 +105,12 @@ global.fetch = async (url, options = {}) => {
             action: 'direct',
             action_value: null,
             servers_count: 2,
+            diagnostics: [{
+              code: 'shadowed_rule',
+              severity: 'error',
+              related_route_id: 3,
+              message: '匹配条件与更高优先级规则 #3 完全相同。',
+            }],
           }],
     }),
   };
@@ -153,6 +159,8 @@ async function verify() {
   assert.match(elements.get('xe-list').innerHTML, /国内直连/);
   assert.match(elements.get('xe-list').innerHTML, /绑定节点/);
   assert.match(elements.get('xe-list').innerHTML, /停用/);
+  assert.match(elements.get('xe-list').innerHTML, /规则被遮蔽/);
+  assert.match(elements.get('xe-diagnostic-summary').innerHTML, /1 个冲突/);
   assert.match(elements.get('xe-target-options').innerHTML, /warp/);
 
   const otherLink = createElement({
