@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Server;
 use App\Models\ServerMachine;
 use App\Models\ServerRoute;
+use App\Models\EgressProxy;
 use App\Models\User;
 use App\Services\Plugin\HookManager;
 use App\Utils\CacheKey;
