@@ -10,6 +10,7 @@
     analysisDimension: 'service',
     analysisSort: 'bytes',
     analysisRowsLimit: 8,
+    analysisExpanded: [],
     events: [],
     pagination: { current_page: 1, last_page: 1, total: 0 },
     filterOptions: { users: [], nodes: [] },

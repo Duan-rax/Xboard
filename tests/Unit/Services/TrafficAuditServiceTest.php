@@ -122,6 +122,7 @@ class TrafficAuditServiceTest extends TestCase
         foreach ([
             ['event-ai', 'connection-ai', 'tcp:api.openai.com:443', 100, 200],
             ['event-google', 'connection-google', 'tcp:www.google.com:443', 50, 150],
+            ['event-telegram', 'connection-telegram', '149.154.167.151:443', 40, 60],
             ['event-other', 'connection-other', 'tcp:unknown.example:8443', 25, 25],
         ] as [$eventId, $connectionId, $destination, $upload, $download]) {
             TrafficAuditService::insertEvent([
@@ -141,10 +142,12 @@ class TrafficAuditServiceTest extends TestCase
             'dimension' => 'service',
             'sort' => 'bytes',
         ]);
-        $this->assertSame(550, $services['cards']['total_bytes']);
+        $this->assertSame(650, $services['cards']['total_bytes']);
         $this->assertSame('OpenAI', $services['rows'][0]['name']);
         $this->assertSame(300, $services['rows'][0]['total_bytes']);
         $this->assertSame('Google', $services['rows'][1]['name']);
+        $this->assertSame('api.openai.com', $services['rows'][0]['destinations'][0]['name']);
+        $this->assertSame('Telegram', collect($services['rows'])->firstWhere('key', 'telegram')['name']);
         $this->assertSame('其他', collect($services['rows'])->firstWhere('key', 'other')['name']);
 
         $destinations = app(TrafficAuditService::class)->analysis([
@@ -152,8 +155,9 @@ class TrafficAuditServiceTest extends TestCase
             'dimension' => 'destination',
             'sort' => 'connections',
         ]);
-        $this->assertSame('api.openai.com', $destinations['rows'][0]['name']);
-        $this->assertSame(1, $destinations['rows'][0]['connections']);
+        $openAiDestination = collect($destinations['rows'])->firstWhere('name', 'api.openai.com');
+        $this->assertNotNull($openAiDestination);
+        $this->assertSame(1, $openAiDestination['connections']);
     }
 
     public function test_health_reports_node_coverage_and_identity_rates(): void

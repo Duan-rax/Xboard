@@ -77,6 +77,7 @@
     #${PAGE} .sa-stack{display:flex;height:28px;overflow:hidden;border-radius:7px;background:#f1f5f9;margin:18px 0 16px}
     #${PAGE} .sa-stack span{display:block;height:100%;min-width:2px;opacity:.9}
     #${PAGE} .sa-analysis-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(110px,1.25fr) 76px 150px 104px;align-items:center;gap:14px;padding:11px 8px;border-top:1px solid #eef2f7;border-radius:7px}
+    #${PAGE} button.sa-analysis-row{width:100%;background:transparent;border:0;color:inherit;text-align:left}
     #${PAGE} .sa-analysis-row:hover{background:#f8fafc}
     #${PAGE} .sa-service-name{display:flex;align-items:center;gap:10px;min-width:0}
     #${PAGE} .sa-service-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;height:32px;border-radius:50%;color:#fff;font-size:10px;font-weight:800}
@@ -85,6 +86,14 @@
     #${PAGE} .sa-track span{display:block;height:100%;border-radius:inherit}
     #${PAGE} .sa-share{font-weight:700;text-align:right;color:#0f172a}
     #${PAGE} .sa-transfer{font-size:11px;color:#64748b;text-align:right;white-space:nowrap}
+    #${PAGE} .sa-row-chevron{display:inline-flex;justify-content:flex-end;color:#94a3b8;transition:transform .15s ease}
+    #${PAGE} .sa-row-chevron.open{transform:rotate(90deg);color:#2563eb}
+    #${PAGE} .sa-domain-list{margin:2px 8px 8px 50px;padding:8px 12px;border-radius:8px;background:#f8fafc}
+    #${PAGE} .sa-domain-row{display:grid;grid-template-columns:minmax(140px,1fr) 130px 90px;gap:14px;align-items:center;padding:7px 6px;border-bottom:1px solid #eef2f7;font-size:11px}
+    #${PAGE} .sa-domain-row:last-child{border-bottom:0}
+    #${PAGE} .sa-domain-name{display:flex;align-items:center;gap:9px;min-width:0;color:#334155;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    #${PAGE} .sa-domain-dot{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;background:#e2e8f0;color:#64748b;font-size:9px;font-weight:800;text-transform:uppercase}
+    #${PAGE} .sa-domain-stat{text-align:right;color:#64748b;white-space:nowrap}
     #${PAGE} .sa-record-title{display:flex;align-items:center;gap:8px}
     #${PAGE} .sa-live{display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 3px #d1fae5}
     #${PAGE} .sa-destination{color:#2563eb;font-weight:600}
@@ -292,14 +301,24 @@
     const visibleRows = rows.slice(0, Number(state.analysisRowsLimit || 8));
     const rowsEl = adapter.get('sa-analysis-rows');
     if (rowsEl) {
-      rowsEl.innerHTML = visibleRows.length ? visibleRows.map((row) => `
-        <div class="sa-analysis-row">
+      rowsEl.innerHTML = visibleRows.length ? visibleRows.map((row) => {
+        const children = row.destinations || [];
+        const expandable = children.length > 0;
+        const expanded = state.analysisExpanded.includes(String(row.key));
+        const rowTag = expandable ? 'button' : 'div';
+        return `
+        <div class="sa-analysis-group">
+        <${rowTag}${expandable ? ' type="button"' : ''} class="sa-analysis-row"${expandable ? ` data-sa-analysis-expand="${esc(row.key)}" aria-expanded="${expanded}"` : ''}>
           <div class="sa-service-name"><span class="sa-service-icon" style="background:${safeColor(row.color)}">${esc(row.short || String(row.name || '?').slice(0, 2))}</span><span class="sa-service-label" title="${esc(row.name || '-')}">${esc(row.name || '-')}</span></div>
           <div class="sa-track"><span style="width:${Math.min(100, Math.max(Number(row.share || 0), Number(row.share || 0) > 0 ? 1 : 0))}%;background:${safeColor(row.color)}"></span></div>
           <div class="sa-share">${Number(row.share || 0).toFixed(1)}%</div>
           <div class="sa-transfer">↑ ${bytes(row.upload_bytes)}　↓ ${bytes(row.download_bytes)}</div>
-          <div class="sa-transfer">${Number(row.connections || 0).toLocaleString()} 个连接</div>
-        </div>`).join('') : '<p>当前时间范围内没有可分析的连接目标。</p>';
+          <div class="sa-transfer">${Number(row.connections || 0).toLocaleString()} 个连接 ${expandable ? `<span class="sa-row-chevron ${expanded ? 'open' : ''}">›</span>` : ''}</div>
+        </${rowTag}>
+        ${expandable && expanded ? `<div class="sa-domain-list">${children.map((target) => `
+          <div class="sa-domain-row"><div class="sa-domain-name"><span class="sa-domain-dot">${esc(String(target.name || '?').slice(0, 2))}</span><span>${esc(target.name || '-')}</span></div><div class="sa-domain-stat">↑ ${bytes(target.upload_bytes)}　↓ ${bytes(target.download_bytes)}</div><div class="sa-domain-stat">${Number(target.connections || 0).toLocaleString()} 个连接</div></div>`).join('')}</div>` : ''}
+        </div>`;
+      }).join('') : '<p>当前时间范围内没有可分析的连接目标。</p>';
     }
     const total = adapter.get('sa-analysis-total');
     if (total) total.textContent = `按${analysis.dimension === 'destination' ? '目标地址' : '服务'}分组，共 ${rows.length} 项`;

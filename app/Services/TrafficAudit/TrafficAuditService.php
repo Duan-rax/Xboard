@@ -48,6 +48,9 @@ class TrafficAuditService
         ['key' => 'bytedance', 'name' => '字节跳动', 'short' => 'BD', 'color' => '#325ab4', 'domains' => [
             'tiktok.com', 'tiktokcdn.com', 'byteoversea.com', 'ibytedtos.com',
         ]],
+        ['key' => 'tmdb', 'name' => 'The Movie Database', 'short' => 'TM', 'color' => '#01b4e4', 'domains' => [
+            'themoviedb.org', 'tmdb.org',
+        ]],
         ['key' => 'x', 'name' => 'X', 'short' => 'X', 'color' => '#0f172a', 'domains' => [
             'x.com', 'twitter.com', 'twimg.com',
         ]],
@@ -246,11 +249,24 @@ class TrafficAuditService
                     'connections' => 0,
                     'upload_bytes' => 0,
                     'download_bytes' => 0,
+                    'destinations' => [],
                 ];
             }
             $groups[$key]['connections'] += (int) $row->connections;
             $groups[$key]['upload_bytes'] += (int) $row->upload_bytes;
             $groups[$key]['download_bytes'] += (int) $row->download_bytes;
+            $targetName = $host ?: '未知目标';
+            if (!isset($groups[$key]['destinations'][$targetName])) {
+                $groups[$key]['destinations'][$targetName] = [
+                    'name' => $targetName,
+                    'connections' => 0,
+                    'upload_bytes' => 0,
+                    'download_bytes' => 0,
+                ];
+            }
+            $groups[$key]['destinations'][$targetName]['connections'] += (int) $row->connections;
+            $groups[$key]['destinations'][$targetName]['upload_bytes'] += (int) $row->upload_bytes;
+            $groups[$key]['destinations'][$targetName]['download_bytes'] += (int) $row->download_bytes;
         }
 
         $rows = collect($groups)->values();
@@ -259,11 +275,25 @@ class TrafficAuditService
             : $row['upload_bytes'] + $row['download_bytes']
         )->values();
         $groupBytes = $rows->sum(fn (array $row): int => $row['upload_bytes'] + $row['download_bytes']);
-        $rows = $rows->map(function (array $row) use ($groupBytes): array {
+        $rows = $rows->map(function (array $row) use ($groupBytes, $sort, $dimension): array {
             $row['total_bytes'] = $row['upload_bytes'] + $row['download_bytes'];
             $row['share'] = $groupBytes > 0
                 ? round($row['total_bytes'] * 100 / $groupBytes, 1)
                 : 0.0;
+            $row['destinations'] = $dimension === 'service'
+                ? collect($row['destinations'])->values()
+                    ->sortByDesc(fn (array $target): int => $sort === 'connections'
+                        ? $target['connections']
+                        : $target['upload_bytes'] + $target['download_bytes']
+                    )
+                    ->take(30)
+                    ->map(function (array $target): array {
+                        $target['total_bytes'] = $target['upload_bytes'] + $target['download_bytes'];
+                        return $target;
+                    })
+                    ->values()
+                    ->all()
+                : [];
             return $row;
         })->take(50)->values()->all();
 
@@ -493,6 +523,25 @@ class TrafficAuditService
 
     private function classifyService(string $host): array
     {
+        if (str_starts_with($host, '149.154.')
+            || str_starts_with($host, '91.108.')
+            || str_starts_with($host, '95.161.')) {
+            return ['key' => 'telegram', 'name' => 'Telegram', 'short' => 'T', 'color' => '#229ed9'];
+        }
+        if (str_starts_with($host, '142.251.')) {
+            return ['key' => 'google', 'name' => 'Google', 'short' => 'G', 'color' => '#4285f4'];
+        }
+        if (str_starts_with($host, '185.199.')) {
+            return ['key' => 'github', 'name' => 'GitHub', 'short' => 'GH', 'color' => '#24292f'];
+        }
+        if (str_starts_with($host, '104.21.')
+            || str_starts_with($host, '172.67.')
+            || str_starts_with($host, '188.114.')) {
+            return ['key' => 'cloudflare', 'name' => 'Cloudflare', 'short' => 'CF', 'color' => '#f48120'];
+        }
+        if ($host === 'sp.v2.udp-over-tcp.arpa') {
+            return ['key' => 'udp-over-tcp', 'name' => 'UDP over TCP', 'short' => 'UoT', 'color' => '#8b5cf6'];
+        }
         foreach (self::SERVICE_CATALOG as $service) {
             foreach ($service['domains'] as $domain) {
                 if ($host === $domain || str_ends_with($host, '.' . $domain)) {

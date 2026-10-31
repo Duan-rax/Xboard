@@ -184,6 +184,7 @@
     if (dimension) {
       state.analysisDimension = dimension.dataset.saAnalysisDimension;
       state.analysisRowsLimit = 8;
+      state.analysisExpanded = [];
       await load();
       return;
     }
@@ -191,6 +192,15 @@
     if (sort) {
       state.analysisSort = sort.dataset.saAnalysisSort;
       await load();
+      return;
+    }
+    const expand = event.target.closest('[data-sa-analysis-expand]');
+    if (expand) {
+      const key = String(expand.dataset.saAnalysisExpand || '');
+      state.analysisExpanded = state.analysisExpanded.includes(key)
+        ? state.analysisExpanded.filter((value) => value !== key)
+        : [...state.analysisExpanded, key];
+      view.renderAnalysis();
       return;
     }
     if (event.target.closest('[data-sa-analysis-more]')) {

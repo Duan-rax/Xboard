@@ -256,7 +256,10 @@ global.fetch = async (url) => {
               sort: /sort=connections/.test(String(url)) ? 'connections' : 'bytes',
               cards: { total_bytes: 4096, upload_bytes: 1024, download_bytes: 3072, connections: 5 },
               rows: [
-                { key: 'openai', name: 'OpenAI', short: 'AI', color: '#10a37f', share: 75, connections: 3, upload_bytes: 100, download_bytes: 300 },
+                { key: 'openai', name: 'OpenAI', short: 'AI', color: '#10a37f', share: 75, connections: 3, upload_bytes: 100, download_bytes: 300, destinations: [
+                  { name: 'api.openai.com', connections: 2, upload_bytes: 80, download_bytes: 220 },
+                  { name: 'chatgpt.com', connections: 1, upload_bytes: 20, download_bytes: 80 },
+                ] },
                 { key: 'google', name: 'Google', short: 'G', color: '#4285f4', share: 25, connections: 2, upload_bytes: 50, download_bytes: 100 },
               ],
             }
@@ -360,6 +363,12 @@ async function verify() {
   assert.match(elements.get('sa-analysis-rows').innerHTML, /OpenAI/);
   assert.match(elements.get('sa-analysis-rows').innerHTML, /75\.0%/);
   assert.equal(requestedUrls.some((url) => /\/analysis\?/.test(url) && /dimension=service/.test(url)), true);
+  assert.doesNotMatch(elements.get('sa-analysis-rows').innerHTML, /api\.openai\.com/);
+  const expand = element({ dataset: { saAnalysisExpand: 'openai' } });
+  expand.closest = (selector) => selector === '[data-sa-analysis-expand]' ? expand : null;
+  page.listeners.click({ target: expand });
+  assert.match(elements.get('sa-analysis-rows').innerHTML, /api\.openai\.com/);
+  assert.match(elements.get('sa-analysis-rows').innerHTML, /chatgpt\.com/);
 
   elements.get('sa-node-id').value = '4';
   elements.get('sa-node-id').listeners.change();
