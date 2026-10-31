@@ -24,4 +24,11 @@ class RoutePresetServiceTest extends TestCase
         );
         $this->assertSame('proxy', $definitions[2]['action']);
     }
+
+    public function test_bittorrent_preset_uses_private_and_public_collections(): void
+    {
+        $this->assertContains('category-pt', RoutePresetService::BIT_TORRENT_GEOSITES);
+        $this->assertContains('category-public-tracker', RoutePresetService::BIT_TORRENT_GEOSITES);
+        $this->assertContains('openbittorrent.com', RoutePresetService::BIT_TORRENT_MANUAL_COVERED);
+    }
 }

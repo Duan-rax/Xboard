@@ -4,6 +4,10 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Refactor the BitTorrent preset around the actual GeoSite database:
+  `CATEGORY-PT` covers 126 private-tracker sites, `CATEGORY-PUBLIC-TRACKER`
+  covers 437 public Tracker domains, and `bittorrent` protocol sniffing catches
+  trackerless traffic. Remove manual entries already covered by collections.
 - Separate managed-egress availability from the final catch-all outbound.
   Nodes may now receive multiple managed outbounds; routes can select any
   granted profile while at most one profile is marked as default.

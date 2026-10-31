@@ -38,6 +38,16 @@ class RoutePresetService
         'replicate.com',
     ];
 
+    public const BIT_TORRENT_GEOSITES = [
+        'category-pt',
+        'category-public-tracker',
+    ];
+
+    public const BIT_TORRENT_MANUAL_COVERED = [
+        'openbittorrent.com',
+        'opentrackr.org',
+    ];
+
     public static function definitions(): array
     {
         return [
@@ -50,7 +60,7 @@ class RoutePresetService
             [
                 'key' => self::BT_KEY,
                 'title' => 'BitTorrent、BT/PT 站点与 Tracker',
-                'description' => '合并 bittorrent 协议嗅探、CATEGORY-PT 集合和现有客户端/Tracker 域名。',
+                'description' => '合并 bittorrent 协议嗅探、CATEGORY-PT、CATEGORY-PUBLIC-TRACKER 与客户端站点。',
                 'action' => 'block',
             ],
             [
@@ -129,8 +139,16 @@ class RoutePresetService
         } else {
             $criteria['protocols'] = ['bittorrent'];
             $criteria['geosite'] = $this->uniqueStrings(array_merge(
-                $criteria['geosite'],
-                ['category-pt@!cn']
+                array_values(array_filter(
+                    $criteria['geosite'],
+                    fn ($value) => !in_array(strtolower((string) $value), ['category-pt@!cn', 'category-pt'], true)
+                        && strtolower((string) $value) !== 'category-public-tracker'
+                )),
+                self::BIT_TORRENT_GEOSITES
+            ));
+            $criteria['domain_suffixes'] = array_values(array_filter(
+                $criteria['domain_suffixes'],
+                fn ($value) => !in_array(strtolower((string) $value), self::BIT_TORRENT_MANUAL_COVERED, true)
             ));
             $remarks = '阻断 BitTorrent、BT/PT 站点与 Tracker';
             $priority = $matched->min('priority') ?? 40;
