@@ -142,7 +142,9 @@ IP/CIDR 时使用 `IPIfNonMatch`；节点状态会把实际策略上报给面板
   `category-ads-and-telemetry`，保持为一条阻断规则。
 - BitTorrent、BT/PT 与 Tracker：合并 `bittorrent` 协议嗅探、
   `category-pt`、`category-public-tracker`、`tracker`、BT 客户端和其他站点域名。
-- AI 服务走管理出站：使用 `category-ai-!cn`，不再维护手工厂商域名。
+- AI 服务走管理出站：只使用 `category-ai-!cn`，不再维护手工厂商域名。
+  数据库中的 `category-ai-cn` 是 116 个国内 AI 域名，不并入此模板；国内
+  AI 仍应遵循节点现有的 `cn_ip` 阻断或直连策略。
 
 模板使用 `preset_key` 识别，不会按名称猜测并反复创建副本。广告和 BT 模板
 会合并所有匹配旧规则的节点绑定；AI 模板只绑定到当前使用所选管理出站的
@@ -151,8 +153,8 @@ IP/CIDR 时使用 `IPIfNonMatch`；节点状态会把实际策略上报给面板
 当前节点 GeoSite 中 `CATEGORY-PT` 包含 126 个 PT 站点，
 `CATEGORY-PUBLIC-TRACKER` 包含 433 个公开 Tracker，`TRACKER` 补充 114 个
 PT/Tracker 域名。`CATEGORY-AI-!CN` 包含 214 个 AI 域名，并完整覆盖常见
-厂商子集合。模板会移除集合已经覆盖的手工域名，只保留 BT 客户端站点等
-集合未涵盖的条目。
+境外厂商子集合；`CATEGORY-AI-CN` 单独保留给国内策略。模板会移除集合
+已经覆盖的手工域名，只保留 BT 客户端站点等集合未涵盖的条目。
 
 把规则绑定到使用管理出站的节点时，可以直接选择“自动授权但不设为默认”。
 节点因此获得 `panel-egress-*` 出站供路由匹配，未命中的流量仍使用原 final。

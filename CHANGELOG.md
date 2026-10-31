@@ -6,7 +6,8 @@ Release dates use the `Asia/Singapore` timezone.
 
 - Replace the manual AI vendor domain list with `CATEGORY-AI-!CN`, which
   contains 214 domains and covers OpenAI, Anthropic, Gemini, Perplexity,
-  Hugging Face, xAI and Copilot categories.
+  Hugging Face, xAI and Copilot categories. Domestic AI remains excluded via
+  `CATEGORY-AI-CN` so the existing `cn_ip` policy stays authoritative.
 - Refactor the BitTorrent preset around the actual GeoSite database:
   `CATEGORY-PT` covers 126 private-tracker sites, `CATEGORY-PUBLIC-TRACKER`
   covers 433 public Tracker domains, and `TRACKER` adds another 114 PT/tracker

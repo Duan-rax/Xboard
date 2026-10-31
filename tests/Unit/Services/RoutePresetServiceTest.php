@@ -10,6 +10,7 @@ class RoutePresetServiceTest extends TestCase
     public function test_builtin_ai_collection_replaces_manual_vendor_list(): void
     {
         $this->assertSame(['category-ai-!cn'], RoutePresetService::AI_GEOSITES);
+        $this->assertNotContains('category-ai-cn', RoutePresetService::AI_GEOSITES);
     }
 
     public function test_definitions_are_stable_and_cover_three_categories(): void
