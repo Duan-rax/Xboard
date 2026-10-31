@@ -4,6 +4,12 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Separate managed-egress availability from the final catch-all outbound.
+  Nodes may now receive multiple managed outbounds; routes can select any
+  granted profile while at most one profile is marked as default.
+- Route binding to a managed egress can grant availability to selected nodes
+  without making that profile final. Missing or revoked outbounds fail closed
+  as a block rule instead of invalidating the whole node configuration.
 - Add idempotent built-in route presets. Ads, telemetry, BitTorrent protocol,
   BT/PT domains and Tracker lists are merged into canonical rules while
   preserving the union of node bindings; AI domains can be bound to a selected

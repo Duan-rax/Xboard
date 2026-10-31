@@ -65,6 +65,7 @@ class RouteRuleSimulator
             }
         }
 
+        $warnings = [];
         $finalAction = 'direct';
         $finalOutbound = 'direct';
         if ($effective !== null) {
@@ -72,12 +73,18 @@ class RouteRuleSimulator
             $finalOutbound = $finalAction === 'proxy'
                 ? $effective['target']
                 : ($finalAction === 'dns' ? 'dns-out' : $finalAction);
+            if ($finalAction === 'proxy'
+                && preg_match('/^panel-egress-(\d+)$/', (string) $finalOutbound, $matches) === 1
+                && !in_array((int) $matches[1], array_map('intval', $node['available_egress_ids'] ?? []), true)) {
+                $finalAction = 'block';
+                $finalOutbound = 'block';
+                $warnings[] = '目标管理出站尚未授权到该节点；运行时会 fail-closed，将规则转换为阻断。';
+            }
         } elseif (!empty($node['egress_proxy_id']) && !empty($node['egress_proxy_enabled'])) {
             $finalAction = 'proxy';
             $finalOutbound = 'panel-egress-' . (int) $node['egress_proxy_id'];
         }
 
-        $warnings = [];
         if ($firstPossible !== null && $firstMatch === null) {
             $warnings[] = '首条可能命中的规则依赖 GeoIP、GeoSite 或 Rule Set，需在节点侧确认数据库内容。';
         }

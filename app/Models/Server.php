@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 use App\Utils\CacheKey;
@@ -433,6 +434,16 @@ class Server extends Model
     public function egressProxy(): BelongsTo
     {
         return $this->belongsTo(EgressProxy::class, 'egress_proxy_id');
+    }
+
+    public function egressBindings(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            EgressProxy::class,
+            'v2_server_egress_binding',
+            'server_id',
+            'egress_proxy_id'
+        )->withPivot('is_default')->withTimestamps();
     }
 
     public function groups()

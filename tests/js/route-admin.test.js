@@ -58,7 +58,7 @@ const elements = new Map();
   'xe-sim-node', 'xe-sim-destination', 'xe-sim-ip', 'xe-sim-port', 'xe-sim-network',
   'xe-sim-protocol', 'xe-sim-source-ip', 'xe-sim-source-port', 'xe-sim-message', 'xe-sim-result',
   'xe-bind-modal', 'xe-bind-title', 'xe-node-search', 'xe-node-bound',
-  'xe-bind-message', 'xe-node-list', 'xe-node-page',
+  'xe-bind-message', 'xe-node-list', 'xe-node-page', 'xe-grant-egress',
 ].forEach((id) => elements.set(id, createElement()));
 
 content.insertAdjacentHTML = (position, html) => {

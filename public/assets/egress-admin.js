@@ -72,6 +72,7 @@
       } else if (state.bindFilter === 'bound' || state.bindFilter === 'unbound') {
         query.set('bound', state.bindFilter);
       }
+      query.set('current_egress_proxy_id', String(state.bindProxy.id));
       query.set('probe_proxy_id', String(state.bindProxy.id));
 
       const result = await api.nodes(query);
@@ -127,7 +128,7 @@
     await loadBindNodes();
   };
 
-  const pollNodeSync = async (serverIds, proxyId, requestedAt) => {
+  const pollNodeSync = async (serverIds, proxyId, requestedAt, expectAvailable = null) => {
     const token = ++state.syncPoll;
     for (let attempt = 1; attempt <= 12; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -137,6 +138,7 @@
           server_ids: serverIds,
           egress_proxy_id: proxyId,
           requested_at: requestedAt,
+          expect_available: expectAvailable,
         });
         const pending = result?.sync?.pending_server_ids?.length || 0;
         if (pending === 0) {
@@ -183,6 +185,45 @@
       await Promise.all([loadBindNodes(), loadCatalog()]);
       if (pending > 0 && result?.requested_at) {
         void pollNodeSync(result.server_ids || ids, proxyId, result.requested_at);
+      }
+    } catch (error) {
+      showBindMessage(error.message, true);
+    }
+  };
+
+  const applyAvailability = async (available, makeDefault = false, clearDefault = false) => {
+    if (!state.selected.size || !state.bindProxy) {
+      showBindMessage('请至少选择一个节点。', true);
+      return;
+    }
+    const ids = [...state.selected];
+    showBindMessage(
+      available
+        ? `正在授权 ${ids.length} 个节点${makeDefault ? '并设为默认出站' : '（不设为默认）'}…`
+        : `正在撤销 ${ids.length} 个节点的出站授权…`
+    );
+    try {
+      const result = await api.availability(
+        state.bindProxy.id,
+        ids,
+        available,
+        makeDefault,
+        clearDefault
+      );
+      const changed = Number(result?.changed || 0);
+      const pending = result?.sync?.pending_server_ids?.length || 0;
+      state.selected.clear();
+      showBindMessage(
+        `${available ? '授权' : '撤销'}完成，实际变更 ${changed} 个节点${pending ? `，${pending} 个节点待确认` : '，节点均已确认'}。`
+      );
+      await Promise.all([loadBindNodes(), loadCatalog()]);
+      if (pending > 0 && result?.requested_at) {
+        void pollNodeSync(
+          result.changed_server_ids || [],
+          state.bindProxy.id,
+          result.requested_at,
+          available
+        );
       }
     } catch (error) {
       showBindMessage(error.message, true);
@@ -353,6 +394,22 @@
     }
     if (event.target.closest('[data-xe-bind-selected]')) {
       await applySelection(Number(state.bindProxy?.id || 0));
+      return;
+    }
+    if (event.target.closest('[data-xe-availability-on]')) {
+      await applyAvailability(true, false, false);
+      return;
+    }
+    if (event.target.closest('[data-xe-availability-default]')) {
+      await applyAvailability(true, true, false);
+      return;
+    }
+    if (event.target.closest('[data-xe-availability-clear-default]')) {
+      await applyAvailability(true, false, true);
+      return;
+    }
+    if (event.target.closest('[data-xe-availability-off]')) {
+      await applyAvailability(false, false, false);
       return;
     }
     if (event.target.closest('[data-xe-unbind-selected]')) {

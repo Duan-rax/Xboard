@@ -156,7 +156,7 @@
       <div class="xe-head">
         <div>
           <h2 id="xe-bind-title">节点绑定</h2>
-          <p>勾选节点后批量绑定或解绑。一个节点同时只能使用一个出站资料；解绑后节点恢复默认 direct 出站。</p>
+          <p>授权表示“把凭据和出站配置下发到节点”，默认表示“未命中路由的流量使用该出站”。两者独立，一个节点可授权多个出站。</p>
         </div>
         <button class="xe-secondary" data-xe-bind-close>返回列表</button>
       </div>
@@ -178,9 +178,11 @@
       </div>
       <div class="xe-foot">
         <span class="xe-small" id="xe-bind-selected-count">未选择节点</span>
-        <button data-xe-bind-selected>绑定所选</button>
-        <button class="xe-secondary" data-xe-unbind-selected>解绑所选</button>
-        <button class="xe-danger" data-xe-unbind-all>解绑全部</button>
+        <button data-xe-availability-on>授权所选</button>
+        <button data-xe-availability-default>授权并设为默认</button>
+        <button class="xe-secondary" data-xe-availability-clear-default>取消默认</button>
+        <button class="xe-secondary" data-xe-availability-off>撤销授权</button>
+        <button class="xe-danger" data-xe-unbind-all>撤销全部授权</button>
         <span id="xe-bind-message" class="xe-small"></span>
       </div>
     </section>`;
@@ -275,14 +277,15 @@
     const currentId = Number(state.bindProxy?.id || 0);
     list.innerHTML = items.map((node) => {
       const boundId = Number(node.egress_proxy_id || 0);
-      const current = boundId > 0 && boundId === currentId;
-      const other = boundId > 0 && boundId !== currentId;
-      const boundLabel = node.egress_proxy_name || (boundId ? `#${boundId}` : '');
+      const current = Boolean(node.current_available);
+      const isDefault = Boolean(node.is_default);
+      const available = Array.isArray(node.egress_bindings) ? node.egress_bindings : [];
       const badge = current
-        ? '<span class="xe-badge xe-on">当前出站</span>'
-        : other
-          ? `<span class="xe-badge xe-bound">已绑定 ${esc(boundLabel)}</span>`
-          : '<span class="xe-badge">未绑定</span>';
+        ? `<span class="xe-badge xe-on">${isDefault ? '已授权 · 默认' : '已授权 · 非默认'}</span>`
+        : '<span class="xe-badge">未授权当前出站</span>';
+      const availableText = available.length
+        ? available.map((item) => `${item.name}${item.is_default ? '（默认）' : ''}`).join('、')
+        : '无管理出站';
       const health = node.probe_health;
       const healthText = health
         ? `${health.ok ? '探测成功' : '探测失败'}${health.latency_ms ? ` · ${Number(health.latency_ms)} ms` : ''}${health.exit_ip ? ` · ${esc(health.exit_ip)}` : ''}`
@@ -294,6 +297,7 @@
             <span class="xe-node-name">${esc(node.name || `节点 #${node.id}`)}</span>
             <span class="xe-small">${esc(node.host)}:${node.port} · #${node.id}</span>
             <span class="xe-small">${healthText}</span>
+            <span class="xe-small">已授权：${esc(availableText)}</span>
           </span>
           <span class="xe-node-side">
             ${badge}

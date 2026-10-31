@@ -9,6 +9,14 @@
   }
 
   root.api = Object.freeze({
+    availability: (proxyId, serverIds, available, makeDefault = false, clearDefault = false) =>
+      adapter.api('/availability', 'POST', {
+        egress_proxy_id: Number(proxyId),
+        server_ids: serverIds.map(Number),
+        available,
+        make_default: makeDefault,
+        clear_default: clearDefault,
+      }),
     bind: (serverIds, proxyId) => adapter.api('/bind', 'POST', {
       server_ids: serverIds,
       egress_proxy_id: proxyId,

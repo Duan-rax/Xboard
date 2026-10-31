@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -24,7 +25,17 @@ class EgressProxy extends Model
         'config' => 'array',
     ];
 
-    public function servers(): HasMany
+    public function servers(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Server::class,
+            'v2_server_egress_binding',
+            'egress_proxy_id',
+            'server_id'
+        )->withPivot('is_default')->withTimestamps();
+    }
+
+    public function defaultServers(): HasMany
     {
         return $this->hasMany(Server::class, 'egress_proxy_id');
     }
@@ -45,5 +56,18 @@ class EgressProxy extends Model
             'allow_insecure' => $this->allow_insecure,
             'config' => $this->config ?? [],
         ];
+    }
+
+    public static function managedIdFromTag(string $tag): int
+    {
+        if (preg_match('/^panel-egress-(\d+)$/', trim($tag), $matches) !== 1) {
+            return 0;
+        }
+        return (int) $matches[1];
+    }
+
+    public static function managedTag(int $id): string
+    {
+        return 'panel-egress-' . $id;
     }
 }

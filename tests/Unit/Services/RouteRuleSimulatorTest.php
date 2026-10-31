@@ -88,6 +88,33 @@ class RouteRuleSimulatorTest extends TestCase
         $this->assertSame('panel-egress-9', $result['final_outbound']);
     }
 
+    public function testManagedEgressRouteFailsClosedWhenUnavailable(): void
+    {
+        $routes = [
+            $this->route(5, 60, ['domain_suffixes' => ['openai.com']], 'proxy', 'panel-egress-2'),
+        ];
+        $target = [
+            'destination' => 'api.openai.com',
+            'domain' => 'api.openai.com',
+            'destination_ip' => '',
+            'port' => 443,
+        ];
+        $blocked = RouteRuleSimulator::simulate($routes, [
+            'available_egress_ids' => [],
+        ], $target);
+        $this->assertSame('block', $blocked['final_action']);
+        $this->assertContains(
+            '目标管理出站尚未授权到该节点；运行时会 fail-closed，将规则转换为阻断。',
+            $blocked['warnings']
+        );
+
+        $allowed = RouteRuleSimulator::simulate($routes, [
+            'available_egress_ids' => [2],
+        ], $target);
+        $this->assertSame('proxy', $allowed['final_action']);
+        $this->assertSame('panel-egress-2', $allowed['final_outbound']);
+    }
+
     private function route(
         int $id,
         int $priority,

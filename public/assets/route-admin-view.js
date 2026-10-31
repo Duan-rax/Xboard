@@ -241,6 +241,7 @@
               <button class="secondary" data-xe-clear-selection>清空选择</button>
               <span id="xe-bind-message" class="xe-message"></span>
             </div>
+            <label class="xe-inline"><input id="xe-grant-egress" type="checkbox" checked> 目标为管理出站时，自动授权给所选节点但不设为默认出站</label>
             <div id="xe-node-list">正在加载…</div>
             <div class="xe-pagination"><button class="secondary" data-xe-node-prev>上一页</button><span id="xe-node-page">第 1 / 1 页</span><button class="secondary" data-xe-node-next>下一页</button></div>
           </section>
@@ -368,6 +369,7 @@
                     ? '<span class="xe-badge on">规则兼容</span>'
                     : '<span class="xe-badge warning">能力未上报</span>'}
                 ${node.target_known === false ? '<br><span class="xe-warning">目标 Tag 可能由节点本地配置提供</span>' : ''}
+                ${node.managed_egress_id && node.egress_available === false ? '<br><span class="xe-warning">目标管理出站尚未授权，绑定时会按勾选策略自动授权</span>' : ''}
               </td>
             </tr>`).join('')}</tbody>
         </table>`;

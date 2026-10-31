@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Services\EgressProxyValidator;
+use App\Services\EgressBindingService;
 use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\ServerService;
@@ -69,6 +70,7 @@ class EgressProxyController extends Controller
             'search' => 'nullable|string|max:128',
             'bound' => 'nullable|in:all,bound,unbound',
             'egress_proxy_id' => 'nullable|integer|min:0',
+            'current_egress_proxy_id' => 'nullable|integer|min:0',
             'probe_proxy_id' => 'nullable|integer|min:0',
         ]);
         $pageSize = (int) ($params['page_size'] ?? 50);
@@ -77,18 +79,24 @@ class EgressProxyController extends Controller
 
         $paginator = Server::query()
             ->select(['id', 'name', 'host', 'port', 'type', 'enabled', 'machine_id', 'egress_proxy_id'])
-            ->with(['egressProxy' => fn ($query) => $query->select(['id', 'name'])])
+            ->with([
+                'egressProxy:id,name',
+                'egressBindings:id,name,protocol',
+            ])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
                         ->orWhere('host', 'like', "%{$search}%");
                 });
             })
-            ->when($bound === 'bound', fn ($query) => $query->whereNotNull('egress_proxy_id'))
-            ->when($bound === 'unbound', fn ($query) => $query->whereNull('egress_proxy_id'))
+            ->when($bound === 'bound', fn ($query) => $query->has('egressBindings'))
+            ->when($bound === 'unbound', fn ($query) => $query->doesntHave('egressBindings'))
             ->when(
                 !empty($params['egress_proxy_id']),
-                fn ($query) => $query->where('egress_proxy_id', (int) $params['egress_proxy_id'])
+                fn ($query) => $query->whereHas(
+                    'egressBindings',
+                    fn ($binding) => $binding->where('v2_egress_proxy.id', (int) $params['egress_proxy_id'])
+                )
             )
             ->orderByDesc('id')
             ->paginate($pageSize);
@@ -104,6 +112,16 @@ class EgressProxyController extends Controller
                 'machine_id' => $server->machine_id,
                 'egress_proxy_id' => $server->egress_proxy_id,
                 'egress_proxy_name' => $server->egressProxy?->name,
+                'is_default' => !empty($params['current_egress_proxy_id'])
+                    && (int) $server->egress_proxy_id === (int) $params['current_egress_proxy_id'],
+                'current_available' => !empty($params['current_egress_proxy_id'])
+                    && $server->egressBindings->contains('id', (int) $params['current_egress_proxy_id']),
+                'egress_bindings' => $server->egressBindings->map(fn (EgressProxy $proxy) => [
+                    'id' => (int) $proxy->id,
+                    'name' => $proxy->name,
+                    'protocol' => $proxy->protocol,
+                    'is_default' => (int) $server->egress_proxy_id === (int) $proxy->id,
+                ])->values(),
                 'probe_health' => !empty($params['probe_proxy_id'])
                     ? Cache::get('egress_health:' . (int) $params['probe_proxy_id'] . ':' . $server->id)
                     : null,
@@ -242,7 +260,7 @@ class EgressProxyController extends Controller
      * Assign or clear an egress profile for one or more nodes without
      * exposing its credentials. egress_proxy_id = 0 means "unbind".
      */
-    public function bind(Request $request)
+    public function bind(Request $request, EgressBindingService $bindings)
     {
         $params = $request->validate([
             'server_id' => 'nullable|integer|min:1',
@@ -266,9 +284,7 @@ class EgressProxyController extends Controller
         }
 
         $egressProxyId = (int) ($params['egress_proxy_id'] ?? 0);
-        if ($egressProxyId > 0) {
-            EgressProxy::findOrFail($egressProxyId);
-        }
+        $proxy = $egressProxyId > 0 ? EgressProxy::findOrFail($egressProxyId) : null;
 
         $servers = Server::query()->whereIn('id', $ids)->get();
         if ($servers->count() !== $ids->count()) {
@@ -277,22 +293,26 @@ class EgressProxyController extends Controller
             ]);
         }
 
-        $changedIds = $servers
-            ->filter(fn (Server $server) => (int) $server->egress_proxy_id !== $egressProxyId)
-            ->pluck('id')
-            ->values();
-
-        DB::transaction(function () use ($changedIds, $egressProxyId) {
-            if ($changedIds->isNotEmpty()) {
-                Server::query()
-                    ->whereIn('id', $changedIds)
-                    ->update(['egress_proxy_id' => $egressProxyId ?: null]);
+        $changedIds = DB::transaction(function () use ($bindings, $proxy, $servers, $ids) {
+            if ($proxy) {
+                return $bindings->setAvailability($proxy, $ids, true, true);
             }
+            $changed = collect();
+            foreach ($servers as $server) {
+                $wasDefault = $server->egress_proxy_id !== null;
+                DB::table('v2_server_egress_binding')
+                    ->where('server_id', $server->id)
+                    ->update(['is_default' => false, 'updated_at' => now()]);
+                if ($wasDefault) {
+                    $server->egress_proxy_id = null;
+                    $server->save();
+                    $changed->push((int) $server->id);
+                }
+            }
+            return $changed;
         });
         $requestedAt = time();
-        ServerService::bumpConfigRevision($changedIds->all());
-        $this->clearAppliedConfig($changedIds);
-        $this->notifyNodeConfigs($changedIds);
+        $this->finishBindingChange($changedIds);
 
         return $this->success([
             'changed' => $changedIds->count(),
@@ -300,6 +320,49 @@ class EgressProxyController extends Controller
             'egress_proxy_id' => $egressProxyId ?: null,
             'requested_at' => $requestedAt,
             'sync' => $this->waitForNodeSync($changedIds, $egressProxyId, $requestedAt),
+        ]);
+    }
+
+    /**
+     * Grant or revoke one outbound for nodes without changing its final-route
+     * status unless make_default/clear_default is explicitly requested.
+     */
+    public function availability(Request $request, EgressBindingService $bindings)
+    {
+        $params = $request->validate([
+            'egress_proxy_id' => 'required|integer|min:1|exists:v2_egress_proxy,id',
+            'server_ids' => 'required|array|min:1|max:500',
+            'server_ids.*' => 'integer|min:1|distinct|exists:v2_server,id',
+            'available' => 'required|boolean',
+            'make_default' => 'nullable|boolean',
+            'clear_default' => 'nullable|boolean',
+        ]);
+        $proxy = EgressProxy::findOrFail((int) $params['egress_proxy_id']);
+        $changedIds = DB::transaction(fn () => $bindings->setAvailability(
+            $proxy,
+            $params['server_ids'],
+            (bool) $params['available'],
+            (bool) ($params['make_default'] ?? false),
+            (bool) ($params['clear_default'] ?? false)
+        ));
+        $requestedAt = time();
+        $this->finishBindingChange($changedIds);
+        return $this->success([
+            'changed' => $changedIds->count(),
+            'server_ids' => collect($params['server_ids'])->map(fn ($id) => (int) $id)->values(),
+            'changed_server_ids' => $changedIds,
+            'egress_proxy_id' => $proxy->id,
+            'available' => (bool) $params['available'],
+            'make_default' => (bool) ($params['make_default'] ?? false),
+            'requested_at' => $requestedAt,
+            'expect_available' => (bool) $params['available'],
+            'sync' => $this->waitForNodeSync(
+                $changedIds,
+                $proxy->id,
+                $requestedAt,
+                3.0,
+                (bool) $params['available']
+            ),
         ]);
     }
 
@@ -311,6 +374,7 @@ class EgressProxyController extends Controller
             'server_ids.*' => 'integer|min:1|distinct',
             'egress_proxy_id' => 'required|integer|min:0',
             'requested_at' => 'required|integer|min:1',
+            'expect_available' => 'nullable|boolean',
         ]);
 
         return $this->success([
@@ -318,7 +382,8 @@ class EgressProxyController extends Controller
                 $params['server_ids'],
                 (int) $params['egress_proxy_id'],
                 (int) $params['requested_at'],
-                0
+                0,
+                isset($params['expect_available']) ? (bool) $params['expect_available'] : null
             ),
         ]);
     }
@@ -331,27 +396,22 @@ class EgressProxyController extends Controller
         ])['egress_proxy_id'];
         EgressProxy::findOrFail($egressProxyId);
 
-        $changedIds = Server::query()
-            ->where('egress_proxy_id', $egressProxyId)
-            ->pluck('id');
-        DB::transaction(function () use ($changedIds) {
-            if ($changedIds->isNotEmpty()) {
-                Server::query()
-                    ->whereIn('id', $changedIds)
-                    ->update(['egress_proxy_id' => null]);
-            }
-        });
+        $proxy = EgressProxy::findOrFail($egressProxyId);
+        $serverIds = $proxy->servers()->pluck('v2_server.id');
+        $changedIds = DB::transaction(fn () => app(EgressBindingService::class)->setAvailability(
+            $proxy,
+            $serverIds,
+            false
+        ));
         $requestedAt = time();
-        ServerService::bumpConfigRevision($changedIds->all());
-        $this->clearAppliedConfig($changedIds);
-        $this->notifyNodeConfigs($changedIds);
+        $this->finishBindingChange($changedIds);
 
         return $this->success([
             'changed' => $changedIds->count(),
-            'server_ids' => $changedIds,
-            'egress_proxy_id' => null,
+            'server_ids' => $serverIds,
+            'egress_proxy_id' => $egressProxyId,
             'requested_at' => $requestedAt,
-            'sync' => $this->waitForNodeSync($changedIds, 0, $requestedAt),
+            'sync' => $this->waitForNodeSync($changedIds, $egressProxyId, $requestedAt, 3.0, false),
         ]);
     }
 
@@ -519,9 +579,7 @@ class EgressProxyController extends Controller
 
     private function healthSummary(EgressProxy $proxy): ?array
     {
-        $nodes = Server::query()
-            ->where('egress_proxy_id', $proxy->id)
-            ->pluck('id');
+        $nodes = $proxy->servers()->pluck('v2_server.id');
         if ($nodes->isEmpty()) {
             return null;
         }
@@ -545,11 +603,17 @@ class EgressProxyController extends Controller
 
     private function syncBoundNodes(EgressProxy $proxy): void
     {
-        $serverIds = Server::query()
-            ->where('egress_proxy_id', $proxy->id)
-            ->pluck('id');
-        ServerService::bumpConfigRevision($serverIds->all());
-        $this->notifyNodeConfigs($serverIds);
+        $serverIds = $proxy->servers()->pluck('v2_server.id');
+        $this->finishBindingChange($serverIds);
+    }
+
+    private function finishBindingChange(iterable $changedIds): void
+    {
+        $ids = collect($changedIds)->map(fn ($id) => (int) $id)->unique()->values();
+        if ($ids->isEmpty()) return;
+        ServerService::bumpConfigRevision($ids->all());
+        $this->clearAppliedConfig($ids);
+        $this->notifyNodeConfigs($ids);
     }
 
     private function notifyNodeConfigs(iterable $serverIds): void
@@ -570,18 +634,28 @@ class EgressProxyController extends Controller
         iterable $serverIds,
         int $egressProxyId,
         int $requestedAt,
-        float $timeout = 3.0
+        float $timeout = 3.0,
+        ?bool $expectAvailable = null
     ): array
     {
         $pending = collect($serverIds)->map(fn ($id) => (int) $id)->unique()->values();
         $deadline = microtime(true) + max(0, $timeout);
 
         do {
-            $pending = $pending->reject(function (int $serverId) use ($egressProxyId, $requestedAt) {
+            $pending = $pending->reject(function (int $serverId) use (
+                $egressProxyId,
+                $requestedAt,
+                $expectAvailable
+            ) {
                 $applied = Cache::get("node_config_applied:{$serverId}");
-                return is_array($applied)
-                    && (int) ($applied['egress_proxy_id'] ?? -1) === $egressProxyId
-                    && (int) ($applied['applied_at'] ?? 0) >= $requestedAt;
+                if (!is_array($applied) || (int) ($applied['applied_at'] ?? 0) < $requestedAt) {
+                    return false;
+                }
+                $availableIds = array_map('intval', $applied['egress_proxy_ids'] ?? []);
+                $present = (int) ($applied['egress_proxy_id'] ?? -1) === $egressProxyId
+                    || (int) ($applied['final_egress_proxy_id'] ?? -1) === $egressProxyId
+                    || in_array($egressProxyId, $availableIds, true);
+                return $expectAvailable === null ? $present : $present === $expectAvailable;
             })->values();
             if ($pending->isEmpty()) {
                 break;

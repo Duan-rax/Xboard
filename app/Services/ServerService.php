@@ -399,8 +399,35 @@ class ServerService
             default => [],
         };
 
+        $availableEgress = app(EgressBindingService::class)->availableForServer((int) $node->id);
+        $availableEgressIds = $availableEgress->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $defaultEgressId = in_array((int) ($node->egress_proxy_id ?? 0), $availableEgressIds, true)
+            ? (int) $node->egress_proxy_id
+            : 0;
+        $supportsMultiEgress = in_array(
+            'multi_egress',
+            NodeCapabilityService::fromMetrics($node->metrics)['features'],
+            true
+        );
         if (!empty($node['route_ids'])) {
-            $response['routes'] = self::getRoutes($node['route_ids']);
+            $response['routes'] = self::getRoutes($node['route_ids'])
+                ->map(function (array $route) use ($availableEgressIds, $defaultEgressId, $supportsMultiEgress) {
+                    if (($route['action'] ?? '') !== 'proxy') return $route;
+                    $egressId = EgressProxy::managedIdFromTag((string) ($route['action_value'] ?? ''));
+                    if ($egressId <= 0 || !in_array($egressId, $availableEgressIds, true)) {
+                        // A managed-egress route without an available outbound
+                        // fails closed instead of falling through to direct.
+                        $route['action'] = 'block';
+                        $route['action_value'] = null;
+                        return $route;
+                    }
+                    if (!$supportsMultiEgress && $egressId !== $defaultEgressId) {
+                        $route['action'] = 'block';
+                        $route['action_value'] = null;
+                    }
+                    return $route;
+                })
+                ->values();
         }
 
         if (!empty($node['custom_outbounds'])) {
@@ -411,14 +438,18 @@ class ServerService
             $response['custom_routes'] = $node['custom_routes'];
         }
 
-        // The egress profile is intentionally exposed only on the
-        // authenticated node control-plane response, never in subscriptions.
-        // A disabled profile behaves as an unbound node and falls back to its
-        // normal direct outbound instead of leaving stale credentials active.
-        if ($node->egress_proxy_id) {
-            $egressProxy = $node->egressProxy;
-            if ($egressProxy && $egressProxy->enabled) {
-                $response['egress_proxy'] = $egressProxy->toNodeConfig();
+        // Only explicitly granted profiles reach this authenticated node.
+        // Availability and the catch-all/final outbound are separate concepts.
+        if ($availableEgress->isNotEmpty()) {
+            $response['egress_proxies'] = $availableEgress->map->toNodeConfig()->values()->all();
+            $response['final_egress_proxy_id'] = $defaultEgressId ?: null;
+        }
+        if ($defaultEgressId > 0) {
+            $defaultEgress = $availableEgress->firstWhere('id', $defaultEgressId);
+            if ($defaultEgress) {
+                // Legacy field for older Node builds: only the default profile
+                // is allowed to remain a final catch-all.
+                $response['egress_proxy'] = $defaultEgress->toNodeConfig();
             }
         }
 

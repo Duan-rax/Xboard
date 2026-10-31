@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Server;
 use App\Services\NodeSyncService;
 use App\Services\ServerService;
+use Illuminate\Support\Facades\DB;
 
 class ServerObserver
 {
@@ -17,6 +18,9 @@ class ServerObserver
 
     public function updated(Server $server): void
     {
+        if ($server->wasChanged('egress_proxy_id')) {
+            $this->syncDefaultEgressBinding($server);
+        }
         $configChanged = $server->wasChanged([
             'server_port',
             'protocol_settings',
@@ -44,6 +48,26 @@ class ServerObserver
                 $server->getOriginal('machine_id')
             );
         }
+    }
+
+    private function syncDefaultEgressBinding(Server $server): void
+    {
+        DB::table('v2_server_egress_binding')
+            ->where('server_id', $server->id)
+            ->update(['is_default' => false, 'updated_at' => now()]);
+        $egressId = (int) ($server->egress_proxy_id ?? 0);
+        if ($egressId <= 0) return;
+        DB::table('v2_server_egress_binding')->insertOrIgnore([
+            'server_id' => $server->id,
+            'egress_proxy_id' => $egressId,
+            'is_default' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('v2_server_egress_binding')
+            ->where('server_id', $server->id)
+            ->where('egress_proxy_id', $egressId)
+            ->update(['is_default' => true, 'updated_at' => now()]);
     }
 
     public function deleted(Server $server): void

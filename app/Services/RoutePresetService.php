@@ -215,6 +215,11 @@ class RoutePresetService
         }
 
         $candidateIds = $candidates->pluck('id')->map(fn ($id) => (int) $id)->push((int) $canonical->id)->unique();
+        $availableServerIds = DB::table('v2_server_egress_binding')
+            ->where('egress_proxy_id', $proxy->id)
+            ->pluck('server_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
         $changed = [];
         foreach (Server::query()->lockForUpdate()->get() as $server) {
             $routeIds = collect($server->route_ids ?? [])->map(fn ($id) => (int) $id);
@@ -223,7 +228,7 @@ class RoutePresetService
             $hasOtherCandidates = $routeIds->contains(
                 fn ($id) => $id !== (int) $canonical->id && $candidateIds->contains($id)
             );
-            $shouldBelong = (int) $server->egress_proxy_id === (int) $proxy->id;
+            $shouldBelong = $availableServerIds->has((int) $server->id);
             if ($hasCanonical === $shouldBelong && !$hasOtherCandidates) {
                 continue;
             }
@@ -247,7 +252,7 @@ class RoutePresetService
             'merged_routes' => $candidates->count(),
             'removed_duplicates' => $removed,
             'server_ids' => $changed,
-            'bound_server_count' => Server::query()->where('egress_proxy_id', $proxy->id)->count(),
+            'bound_server_count' => $availableServerIds->count(),
         ];
     }
 

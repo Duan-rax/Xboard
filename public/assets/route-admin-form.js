@@ -152,6 +152,7 @@
   const readBindingQuery = () => ({
     search: values('xe-node-search'),
     bound: values('xe-node-bound') || 'all',
+    grant_egress: Boolean(adapter.get('xe-grant-egress')?.checked),
   });
 
   const readSimulator = () => ({

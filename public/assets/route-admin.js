@@ -125,6 +125,7 @@
         route_id: Number(state.bindingRoute.id),
         server_ids: [...state.bindingSelected],
         bound,
+        grant_egress: form.readBindingQuery().grant_egress,
       });
       if (Number(result?.changed || 0) === 0) {
         showBindMessage('所选节点已经是目标状态，无需重载。');

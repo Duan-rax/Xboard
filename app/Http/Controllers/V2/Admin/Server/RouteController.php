@@ -4,8 +4,10 @@ namespace App\Http\Controllers\V2\Admin\Server;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Models\ServerRoute;
+use App\Services\EgressBindingService;
 use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\RouteRuleAnalyzer;
@@ -19,7 +21,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use App\Models\EgressProxy;
 
 class RouteController extends Controller
 {
@@ -144,12 +145,22 @@ class RouteController extends Controller
                 $targets[$tag]['server_ids'][] = (int) $server->id;
             }
         }
+        foreach (EgressProxy::query()->withCount('servers')->where('enabled', true)->orderBy('name')->get() as $proxy) {
+            $tag = EgressProxy::managedTag((int) $proxy->id);
+            $targets[$tag] = [
+                'label' => '管理出站 · ' . $proxy->name,
+                'server_ids' => [],
+                'managed' => true,
+                'server_count' => (int) $proxy->servers_count,
+            ];
+        }
         ksort($targets);
         return $this->success([
             'targets' => collect($targets)->map(fn ($target, $tag) => [
                 'tag' => $tag,
                 'label' => $target['label'],
-                'server_count' => count(array_unique($target['server_ids'])),
+                'server_count' => (int) ($target['server_count'] ?? count(array_unique($target['server_ids']))),
+                'managed' => (bool) ($target['managed'] ?? false),
             ])->values(),
             'nodes' => Server::query()
                 ->select(['id', 'name', 'host', 'enabled', 'type', 'metrics', 'egress_proxy_id'])
@@ -205,7 +216,7 @@ class RouteController extends Controller
         ]);
         $server = Server::query()
             ->select(['id', 'name', 'host', 'type', 'route_ids', 'egress_proxy_id', 'metrics', 'custom_routes'])
-            ->with(['egressProxy:id,name,enabled'])
+            ->with(['egressProxy:id,name,enabled', 'egressBindings:id,name,protocol'])
             ->findOrFail((int) $params['server_id']);
         $routeIds = $this->normalizeRouteIds($server->route_ids);
         $routes = ServerRoute::query()
@@ -231,6 +242,7 @@ class RouteController extends Controller
             'domain_strategy' => (string) ($metrics['domain_strategy'] ?? 'AsIs'),
             'egress_proxy_id' => (int) ($server->egress_proxy_id ?? 0),
             'egress_proxy_enabled' => (bool) ($server->egressProxy?->enabled ?? false),
+            'available_egress_ids' => $server->egressBindings->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'custom_routes' => $server->custom_routes ?? [],
         ], [
             'destination' => $destination,
@@ -263,6 +275,7 @@ class RouteController extends Controller
 
         $query = Server::query()
             ->select(['id', 'name', 'host', 'port', 'type', 'enabled', 'machine_id', 'route_ids', 'custom_outbounds'])
+            ->with('egressBindings:id,name,protocol')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
@@ -291,6 +304,9 @@ class RouteController extends Controller
                 $tags = collect($server->custom_outbounds ?: [])
                     ->pluck('tag')->map(fn ($tag) => trim((string) $tag))->filter()->values();
                 $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
+                $managedEgressId = EgressProxy::managedIdFromTag($target);
+                $egressAvailable = $managedEgressId <= 0
+                    || $server->egressBindings->contains('id', $managedEgressId);
                 return [
                     'id' => (int) $server->id,
                     'name' => $server->name,
@@ -304,6 +320,8 @@ class RouteController extends Controller
                     // False is a warning, not a hard rejection: a node may
                     // define the target in its local custom_config.
                     'target_known' => $target === '' || $tags->contains($target),
+                    'managed_egress_id' => $managedEgressId ?: null,
+                    'egress_available' => $egressAvailable,
                     'capabilities' => $capabilities,
                     'compatibility' => NodeCapabilityService::evaluate(
                         $criteria,
@@ -323,18 +341,20 @@ class RouteController extends Controller
     }
 
     /** Attach or detach one route from one or more nodes. */
-    public function bind(Request $request)
+    public function bind(Request $request, EgressBindingService $egressBindings)
     {
         $params = $request->validate([
             'route_id' => 'required|integer|min:1|exists:v2_server_route,id',
             'server_ids' => 'required|array|min:1|max:500',
             'server_ids.*' => 'integer|min:1|distinct',
             'bound' => 'required|boolean',
+            'grant_egress' => 'nullable|boolean',
         ]);
         $routeId = (int) $params['route_id'];
         $bound = (bool) $params['bound'];
         $ids = collect($params['server_ids'])->map(fn ($id) => (int) $id)->unique()->values();
         $changedIds = collect();
+        $egressChangedIds = collect();
         $route = ServerRoute::findOrFail($routeId);
         if ($bound) {
             $criteria = $this->criteriaForRoute($route);
@@ -357,6 +377,33 @@ class RouteController extends Controller
                     'server_ids' => ['所选节点不支持此规则：' . implode('；', $incompatible)],
                 ]);
             }
+
+            $managedEgressId = EgressProxy::managedIdFromTag((string) $route->action_value);
+            if ($managedEgressId > 0) {
+                $proxy = EgressProxy::find($managedEgressId);
+                if (!$proxy || !$proxy->enabled) {
+                    throw ValidationException::withMessages([
+                        'server_ids' => ['规则引用的管理出站不存在或已停用，请先修复出站配置。'],
+                    ]);
+                }
+                $availableIds = DB::table('v2_server_egress_binding')
+                    ->where('egress_proxy_id', $managedEgressId)
+                    ->whereIn('server_id', $ids)
+                    ->pluck('server_id')
+                    ->map(fn ($serverId) => (int) $serverId);
+                $missingIds = $ids->diff($availableIds)->values();
+                if ($missingIds->isNotEmpty() && !$request->boolean('grant_egress', true)) {
+                    throw ValidationException::withMessages([
+                        'server_ids' => [
+                            '以下节点尚未授权目标管理出站：' . $missingIds->implode(', ')
+                            . '。请允许自动授权或先在出站管理中下发。',
+                        ],
+                    ]);
+                }
+                if ($missingIds->isNotEmpty()) {
+                    $egressChangedIds = $egressBindings->ensureAvailability($proxy, $missingIds);
+                }
+            }
         }
 
         DB::transaction(function () use ($ids, $routeId, $bound, $changedIds) {
@@ -378,6 +425,7 @@ class RouteController extends Controller
                 $changedIds->push((int) $server->id);
             }
         });
+        $changedIds = $changedIds->merge($egressChangedIds)->unique()->values();
 
         $requestedAt = time();
         $this->clearAppliedConfig($changedIds);
@@ -387,6 +435,7 @@ class RouteController extends Controller
             'server_ids' => $ids,
             'route_id' => $routeId,
             'bound' => $bound,
+            'managed_egress_id' => $managedEgressId ?? null,
             'requested_at' => $requestedAt,
             'sync' => $this->waitForNodeSync($changedIds, $requestedAt),
         ]);
@@ -568,6 +617,11 @@ class RouteController extends Controller
     {
         $bindingsByRoute = [];
         $outboundTagsByServer = [];
+        $managedByServer = DB::table('v2_server_egress_binding')
+            ->select(['server_id', 'egress_proxy_id'])
+            ->get()
+            ->groupBy('server_id')
+            ->map(fn ($rows) => $rows->pluck('egress_proxy_id')->map(fn ($id) => (int) $id)->all());
 
         foreach (Server::query()->select(['id', 'route_ids', 'custom_outbounds'])->get() as $server) {
             $serverId = (int) $server->id;
@@ -575,12 +629,16 @@ class RouteController extends Controller
                 $bindingsByRoute[$routeId] ??= [];
                 $bindingsByRoute[$routeId][] = $serverId;
             }
-            $outboundTagsByServer[$serverId] = collect($server->custom_outbounds ?: [])
+            $tags = collect($server->custom_outbounds ?: [])
                 ->pluck('tag')
                 ->map(fn ($tag) => trim((string) $tag))
                 ->filter()
                 ->values()
                 ->all();
+            foreach ($managedByServer->get($serverId, []) as $egressId) {
+                $tags[] = EgressProxy::managedTag((int) $egressId);
+            }
+            $outboundTagsByServer[$serverId] = array_values(array_unique($tags));
         }
 
         return [$bindingsByRoute, $outboundTagsByServer];
