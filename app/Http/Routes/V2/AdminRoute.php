@@ -21,7 +21,6 @@ use App\Http\Controllers\V2\Admin\PaymentController;
 use App\Http\Controllers\V2\Admin\SystemController;
 use App\Http\Controllers\V2\Admin\ThemeController;
 use App\Http\Controllers\V2\Admin\TrafficResetController;
-use App\Http\Controllers\V2\Admin\TrafficAuditController;
 use Illuminate\Contracts\Routing\Registrar;
 
 class AdminRoute
@@ -88,16 +87,6 @@ class AdminRoute
                 $router->post('/bind', [RouteController::class, 'bind']);
                 $router->post('/bind-status', [RouteController::class, 'bindStatus']);
                 $router->post('/toggle', [RouteController::class, 'toggle']);
-            });
-            $router->group([
-                'prefix' => 'security-audit'
-            ], function ($router) {
-                $router->get('/overview', [TrafficAuditController::class, 'overview']);
-                $router->get('/analysis', [TrafficAuditController::class, 'analysis']);
-                $router->get('/events', [TrafficAuditController::class, 'events']);
-                $router->get('/settings', [TrafficAuditController::class, 'settings']);
-                $router->post('/settings', [TrafficAuditController::class, 'saveSettings']);
-                $router->post('/cleanup', [TrafficAuditController::class, 'cleanup']);
             });
             // 出站管理：配置住宅/HTTP/SOCKS/协议落地并绑定现有节点。
             $router->group([

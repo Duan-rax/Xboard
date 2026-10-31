@@ -81,11 +81,6 @@
 
 <body>
   <div id="root"></div>
-  <script src="/assets/security-audit-adapter.js?v={{ substr(md5_file(public_path('assets/security-audit-adapter.js')), 0, 12) }}" defer></script>
-  <script src="/assets/security-audit-state.js?v={{ substr(md5_file(public_path('assets/security-audit-state.js')), 0, 12) }}" defer></script>
-  <script src="/assets/security-audit-api.js?v={{ substr(md5_file(public_path('assets/security-audit-api.js')), 0, 12) }}" defer></script>
-  <script src="/assets/security-audit-view.js?v={{ substr(md5_file(public_path('assets/security-audit-view.js')), 0, 12) }}" defer></script>
-  <script src="/assets/security-audit.js?v={{ substr(md5_file(public_path('assets/security-audit.js')), 0, 12) }}" defer></script>
   <script src="/assets/egress-admin-adapter.js?v={{ substr(md5_file(public_path('assets/egress-admin-adapter.js')), 0, 12) }}" defer></script>
   <script src="/assets/egress-admin-state.js?v={{ substr(md5_file(public_path('assets/egress-admin-state.js')), 0, 12) }}" defer></script>
   <script src="/assets/egress-admin-form.js?v={{ substr(md5_file(public_path('assets/egress-admin-form.js')), 0, 12) }}" defer></script>

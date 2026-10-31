@@ -3,12 +3,10 @@
 namespace App\Console;
 
 use App\Services\Plugin\PluginManager;
-use App\Services\TrafficAudit\TrafficAuditService;
 use App\Utils\CacheKey;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class Kernel extends ConsoleKernel
 {
@@ -46,11 +44,6 @@ class Kernel extends ConsoleKernel
         $schedule->command('horizon:snapshot')->everyFiveMinutes()->onOneServer();
         // cleanup stale online_count (GC for Redis TTL expiration)
         $schedule->command('cleanup:online-status')->everyFiveMinutes()->onOneServer();
-        $schedule->call(function (): void {
-            DB::table('v2_traffic_audit_events')
-                ->where('occurred_at', '<', now()->subDays(TrafficAuditService::retentionDays()))
-                ->delete();
-        })->dailyAt('03:19')->onOneServer();
         // backup Timing
         // if (env('ENABLE_AUTO_BACKUP_AND_UPDATE', false)) {
         //     $schedule->command('backup:database', ['true'])->daily()->onOneServer();
