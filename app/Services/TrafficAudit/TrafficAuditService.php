@@ -135,7 +135,14 @@ class TrafficAuditService
     public function overview(array $filters = []): array
     {
         [$from, $to] = self::resolveRange($filters);
-        $query = $this->filteredQuery($filters, $from, $to);
+        $query = $this->filteredQuery($filters, $from, $to)
+            ->where(function (Builder $q): void {
+                $q->whereNull('destination')
+                    ->orWhere(function (Builder $inner): void {
+                        $inner->where('destination', 'not like', '%sp.v2.udp-over-tcp.arpa%')
+                            ->where('destination', 'not like', '%sp.udp-over-tcp.arpa%');
+                    });
+            });
         $totals = (clone $query)->selectRaw(
             'COALESCE(SUM(upload_bytes),0) upload_bytes, ' .
             'COALESCE(SUM(download_bytes),0) download_bytes, ' .

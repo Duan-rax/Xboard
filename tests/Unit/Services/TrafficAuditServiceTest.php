@@ -124,6 +124,7 @@ class TrafficAuditServiceTest extends TestCase
             ['event-google', 'connection-google', 'tcp:www.google.com:443', 50, 150],
             ['event-telegram', 'connection-telegram', '149.154.167.151:443', 40, 60],
             ['event-other', 'connection-other', 'tcp:unknown.example:8443', 25, 25],
+            ['event-uot-control', 'connection-uot-control', 'sp.v2.udp-over-tcp.arpa:443', 500, 500],
         ] as [$eventId, $connectionId, $destination, $upload, $download]) {
             TrafficAuditService::insertEvent([
                 'event_id' => $eventId,
@@ -149,6 +150,7 @@ class TrafficAuditServiceTest extends TestCase
         $this->assertSame('api.openai.com', $services['rows'][0]['destinations'][0]['name']);
         $this->assertSame('Telegram', collect($services['rows'])->firstWhere('key', 'telegram')['name']);
         $this->assertSame('其他', collect($services['rows'])->firstWhere('key', 'other')['name']);
+        $this->assertNull(collect($services['rows'])->firstWhere('key', 'udp-over-tcp'));
 
         $destinations = app(TrafficAuditService::class)->analysis([
             'range' => '24h',
