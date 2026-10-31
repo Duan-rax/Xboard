@@ -15,8 +15,15 @@ Fork images or `latest`.
 Local SGP verification:
 
 ```bash
-docker build -f Dockerfile.fork -t xboard-local:test .
+docker build \
+  --build-arg CACHEBUST="$(git rev-parse HEAD)" \
+  -f Dockerfile.fork \
+  -t xboard-local:test .
 ```
+
+`Dockerfile.fork` defaults to `Duan-rax/Xboard`. The release workflow overrides
+`REPO_URL` with the current `github.repository`; local builds should always pass
+a unique `CACHEBUST` so the image must clone the requested source revision.
 
 Do not tag or publish every maintenance commit. Accumulate a verified batch,
 run the Fork CI, build and test on SGP, deploy a canary, and only then push a

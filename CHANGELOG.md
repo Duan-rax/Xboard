@@ -38,6 +38,9 @@ Release dates use the `Asia/Singapore` timezone.
   HTTPUpgrade stream settings for VLESS/Trojan.
 - Make fork CI and Docker workflows manual-only so pushing source code does not
   consume GitHub Actions minutes or publish binaries automatically.
+- Make local `Dockerfile.fork` builds clone this fork by default and require a
+  unique cache-busting revision, preventing images from silently embedding
+  upstream source.
 - Remove the experimental user-traffic audit module, collector bootstrap,
   event database and Xray byte-count patch. Routing, managed egress and
   configuration synchronization remain available without retaining user
