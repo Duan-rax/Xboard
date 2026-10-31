@@ -219,8 +219,16 @@ class RoutePresetService
         foreach (Server::query()->lockForUpdate()->get() as $server) {
             $routeIds = collect($server->route_ids ?? [])->map(fn ($id) => (int) $id);
             $before = $routeIds->all();
+            $hasCanonical = $routeIds->contains((int) $canonical->id);
+            $hasOtherCandidates = $routeIds->contains(
+                fn ($id) => $id !== (int) $canonical->id && $candidateIds->contains($id)
+            );
+            $shouldBelong = (int) $server->egress_proxy_id === (int) $proxy->id;
+            if ($hasCanonical === $shouldBelong && !$hasOtherCandidates) {
+                continue;
+            }
             $routeIds = $routeIds->reject(fn ($id) => $candidateIds->contains($id));
-            if ((int) $server->egress_proxy_id === (int) $proxy->id) {
+            if ($shouldBelong) {
                 $routeIds->push((int) $canonical->id);
             }
             $routeIds = $routeIds->unique()->values();
@@ -250,12 +258,11 @@ class RoutePresetService
         foreach (Server::query()->lockForUpdate()->get() as $server) {
             $current = collect($server->route_ids ?? [])->map(fn ($id) => (int) $id);
             $before = $current->all();
-            $contains = $current->contains(fn ($id) => $routeIds->contains($id));
-            if (!$contains && $routeIds->isEmpty()) {
-                continue;
-            }
+            $legacyIds = $routeIds->reject(fn ($id) => $id === $canonicalId);
+            $hasLegacy = $current->contains(fn ($id) => $legacyIds->contains($id));
+            if (!$hasLegacy) continue;
             $next = $current->reject(fn ($id) => $routeIds->contains($id));
-            if ($contains) $next->push($canonicalId);
+            $next->push($canonicalId);
             $next = $next->unique()->values();
             if ($next->all() !== $before) {
                 $server->route_ids = $next->all();
