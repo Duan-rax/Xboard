@@ -147,7 +147,7 @@ class NodeSyncService
     /**
      * Publish a push command to Redis — picked up by the Workerman WS server
      */
-    public static function push(int $nodeId, string $event, array $data): void
+    public static function push(int $nodeId, string $event, array $data): bool
     {
         try {
             Redis::publish('node:push', json_encode([
@@ -155,11 +155,13 @@ class NodeSyncService
                 'event' => $event,
                 'data' => $data,
             ]));
+            return true;
         } catch (\Throwable $e) {
             Log::warning("[NodePush] Redis publish failed: {$e->getMessage()}", [
                 'node_id' => $nodeId,
                 'event' => $event,
             ]);
+            return false;
         }
     }
 

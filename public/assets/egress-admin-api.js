@@ -17,6 +17,11 @@
     drop: (id) => adapter.api('/drop', 'POST', { id: Number(id) }),
     fetch: (query) => adapter.api(`/fetch?${query.toString()}`),
     nodes: (query) => adapter.api(`/nodes?${query.toString()}`),
+    probe: (proxyId, serverIds, target = '') => adapter.api('/probe', 'POST', {
+      id: Number(proxyId),
+      server_ids: serverIds.map(Number),
+      target: target || undefined,
+    }),
     save: (payload) => adapter.api('/save', 'POST', payload),
     test: (id) => adapter.api('/test', 'POST', { id: Number(id) }),
     unbindAll: (proxyId) => adapter.api('/unbind-all', 'POST', {

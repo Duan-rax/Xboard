@@ -54,6 +54,8 @@ const elements = new Map();
   'xe-enabled', 'xe-domains', 'xe-domain-suffixes', 'xe-ip-cidrs', 'xe-ports',
   'xe-networks', 'xe-source-cidrs', 'xe-source-ports', 'xe-action', 'xe-target',
   'xe-target-options', 'xe-message', 'xe-preview', 'xe-diagnostic-summary', 'xe-list', 'xe-search',
+  'xe-sim-node', 'xe-sim-destination', 'xe-sim-ip', 'xe-sim-port', 'xe-sim-network',
+  'xe-sim-protocol', 'xe-sim-source-ip', 'xe-sim-source-port', 'xe-sim-message', 'xe-sim-result',
   'xe-bind-modal', 'xe-bind-title', 'xe-node-search', 'xe-node-bound',
   'xe-bind-message', 'xe-node-list', 'xe-node-page',
 ].forEach((id) => elements.set(id, createElement()));
@@ -98,7 +100,10 @@ global.fetch = async (url, options = {}) => {
     status: 200,
     json: async () => ({
       data: String(url).includes('/options')
-        ? { targets: [{ tag: 'warp', label: 'WARP (warp)' }] }
+        ? {
+            targets: [{ tag: 'warp', label: 'WARP (warp)' }],
+            nodes: [{ id: 12, name: '日本 01', host: 'jp.example.com', kernel: 'xray', enabled: true }],
+          }
         : [{
             id: 7,
             remarks: '国内直连',
@@ -174,6 +179,7 @@ async function verify() {
   assert.equal(typeof globalThis.XboardRouteAdmin.diagnostics.renderSummary, 'function');
   assert.equal(typeof globalThis.XboardRouteAdmin.view.renderList, 'function');
   assert.equal(typeof globalThis.XboardRouteAdmin.api.fetchCatalog, 'function');
+  assert.equal(typeof globalThis.XboardRouteAdmin.api.simulate, 'function');
   assert.equal(existingContent.style.display, '');
 
   setTimeout(() => {
@@ -203,6 +209,7 @@ async function verify() {
   assert.match(elements.get('xe-list').innerHTML, /规则被遮蔽/);
   assert.match(elements.get('xe-diagnostic-summary').innerHTML, /1 个冲突/);
   assert.match(elements.get('xe-target-options').innerHTML, /warp/);
+  assert.match(elements.get('xe-sim-node').innerHTML, /日本 01/);
 
   const otherLink = createElement({
     href: '/server/manage',

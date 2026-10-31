@@ -72,6 +72,7 @@
       } else if (state.bindFilter === 'bound' || state.bindFilter === 'unbound') {
         query.set('bound', state.bindFilter);
       }
+      query.set('probe_proxy_id', String(state.bindProxy.id));
 
       const result = await api.nodes(query);
       state.bindNodes = Array.isArray(result?.items) ? result.items : [];
@@ -211,6 +212,24 @@
     }
   };
 
+  const probeFromNode = async (proxyId, serverId, button) => {
+    button.disabled = true;
+    showBindMessage(`正在从节点 #${serverId} 执行真实代理探测，最长等待约 14 秒…`);
+    try {
+      const response = await api.probe(proxyId, [serverId]);
+      const result = response?.items?.[0];
+      showBindMessage(
+        result?.message || (result?.ok ? '节点侧出站链路可用。' : '节点侧出站链路不可用。'),
+        !result?.ok
+      );
+      await loadBindNodes();
+    } catch (error) {
+      showBindMessage(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  };
+
   const handleMainClick = async (event) => {
     if (!adapter.page()) return;
     if (event.target.closest('[data-xe-close]')) {
@@ -342,6 +361,15 @@
     }
     if (event.target.closest('[data-xe-unbind-all]')) {
       await unbindEveryNode();
+      return;
+    }
+    const probe = event.target.closest('[data-xe-probe-node]');
+    if (probe) {
+      await probeFromNode(
+        Number(probe.dataset.xeProbeProxy),
+        Number(probe.dataset.xeProbeNode),
+        probe
+      );
     }
   };
 

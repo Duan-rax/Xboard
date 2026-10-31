@@ -9,6 +9,7 @@ use App\Models\ServerRoute;
 use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\RouteRuleAnalyzer;
+use App\Services\RouteRuleSimulator;
 use App\Services\RouteRuleValidator;
 use App\Services\ServerService;
 use Illuminate\Http\Request;
@@ -148,7 +149,77 @@ class RouteController extends Controller
                 'label' => $target['label'],
                 'server_count' => count(array_unique($target['server_ids'])),
             ])->values(),
+            'nodes' => Server::query()
+                ->select(['id', 'name', 'host', 'enabled', 'type', 'metrics', 'egress_proxy_id'])
+                ->orderBy('name')
+                ->get()
+                ->map(function (Server $server) {
+                    $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
+                    return [
+                        'id' => (int) $server->id,
+                        'name' => $server->name,
+                        'host' => $server->host,
+                        'type' => $server->type,
+                        'enabled' => (bool) $server->enabled,
+                        'kernel' => $capabilities['kernel'],
+                    ];
+                })
+                ->values(),
         ]);
+    }
+
+    public function simulate(Request $request)
+    {
+        $params = $request->validate([
+            'server_id' => 'required|integer|min:1|exists:v2_server,id',
+            'destination' => 'required|string|max:255',
+            'destination_ip' => 'nullable|ip',
+            'port' => 'nullable|integer|between:1,65535',
+            'network' => 'nullable|in:tcp,udp',
+            'source_ip' => 'nullable|ip',
+            'source_port' => 'nullable|integer|between:1,65535',
+            'protocol' => 'nullable|in:http,tls,quic,bittorrent',
+        ]);
+        $server = Server::query()
+            ->select(['id', 'name', 'host', 'type', 'route_ids', 'egress_proxy_id', 'metrics', 'custom_routes'])
+            ->with(['egressProxy:id,name,enabled'])
+            ->findOrFail((int) $params['server_id']);
+        $routeIds = $this->normalizeRouteIds($server->route_ids);
+        $routes = ServerRoute::query()
+            ->whereIn('id', $routeIds)
+            ->orderBy('priority')
+            ->orderBy('id')
+            ->get();
+        $destination = trim((string) $params['destination']);
+        $destinationIp = trim((string) ($params['destination_ip'] ?? ''));
+        $domain = filter_var($destination, FILTER_VALIDATE_IP) === false ? $destination : '';
+        if ($destinationIp === '' && filter_var($destination, FILTER_VALIDATE_IP) !== false) {
+            $destinationIp = $destination;
+        }
+        $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
+        $metrics = $server->metrics ?? [];
+        $result = RouteRuleSimulator::simulate($routes, [
+            'id' => (int) $server->id,
+            'name' => $server->name,
+            'host' => $server->host,
+            'type' => $server->type,
+            'route_ids' => $routeIds,
+            'kernel' => $capabilities['kernel'],
+            'domain_strategy' => (string) ($metrics['domain_strategy'] ?? 'AsIs'),
+            'egress_proxy_id' => (int) ($server->egress_proxy_id ?? 0),
+            'egress_proxy_enabled' => (bool) ($server->egressProxy?->enabled ?? false),
+            'custom_routes' => $server->custom_routes ?? [],
+        ], [
+            'destination' => $destination,
+            'domain' => $domain,
+            'destination_ip' => $destinationIp,
+            'port' => isset($params['port']) ? (int) $params['port'] : null,
+            'network' => strtolower((string) ($params['network'] ?? '')),
+            'source_ip' => trim((string) ($params['source_ip'] ?? '')),
+            'source_port' => isset($params['source_port']) ? (int) $params['source_port'] : null,
+            'protocol' => strtolower((string) ($params['protocol'] ?? '')),
+        ]);
+        return $this->success($result);
     }
 
     /** Paginated node picker for attaching a route group to existing nodes. */

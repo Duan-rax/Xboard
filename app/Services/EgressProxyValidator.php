@@ -50,6 +50,10 @@ class EgressProxyValidator
                 )) {
                     $errors['config.uuid'] = ['VLESS UUID 必须是标准 36 位格式，例如 00000000-0000-0000-0000-000000000000。'];
                 }
+                $flow = strtolower(trim((string) ($config['flow'] ?? '')));
+                if ($flow !== '' && $flow !== 'xtls-rprx-vision') {
+                    $errors['config.flow'] = ['VLESS flow 仅支持 xtls-rprx-vision。'];
+                }
                 break;
 
             case 'trojan':
@@ -57,6 +61,19 @@ class EgressProxyValidator
                     $errors['password'] = ['Trojan 出站必须填写密码。'];
                 }
                 break;
+        }
+
+        $network = strtolower(trim((string) ($config['network'] ?? '')));
+        if ($network === '') {
+            $network = 'tcp';
+        }
+        if ($network === 'websocket') {
+            $network = 'ws';
+        }
+        if (!in_array($network, ['tcp', 'ws', 'grpc', 'http', 'httpupgrade'], true)) {
+            $errors['config.network'] = ['出站传输网络只支持 tcp、ws、grpc、http 或 httpupgrade。'];
+        } elseif ($network !== 'tcp' && !in_array($protocol, ['vless', 'trojan'], true)) {
+            $errors['config.network'] = ['只有 VLESS 或 Trojan 出站可以使用非 TCP 传输。'];
         }
 
         $reality = $config['reality'] ?? null;
@@ -72,6 +89,9 @@ class EgressProxyValidator
                 $errors['config.reality.short_id'] = ['Reality 出站必须填写 short_id。'];
             } elseif (!preg_match('/^(?:[0-9a-fA-F]{2}){1,8}$/', $shortId)) {
                 $errors['config.reality.short_id'] = ['Reality short_id 必须是 2-16 位、长度为偶数的十六进制字符。'];
+            }
+            if ($network !== 'tcp') {
+                $errors['config.network'] = ['Reality 出站目前只支持 tcp 传输。'];
             }
         }
 

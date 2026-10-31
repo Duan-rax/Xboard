@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Services\EgressProxyValidator;
+use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\ServerService;
 use Illuminate\Http\Request;
@@ -68,6 +69,7 @@ class EgressProxyController extends Controller
             'search' => 'nullable|string|max:128',
             'bound' => 'nullable|in:all,bound,unbound',
             'egress_proxy_id' => 'nullable|integer|min:0',
+            'probe_proxy_id' => 'nullable|integer|min:0',
         ]);
         $pageSize = (int) ($params['page_size'] ?? 50);
         $search = trim((string) ($params['search'] ?? ''));
@@ -102,6 +104,9 @@ class EgressProxyController extends Controller
                 'machine_id' => $server->machine_id,
                 'egress_proxy_id' => $server->egress_proxy_id,
                 'egress_proxy_name' => $server->egressProxy?->name,
+                'probe_health' => !empty($params['probe_proxy_id'])
+                    ? Cache::get('egress_health:' . (int) $params['probe_proxy_id'] . ':' . $server->id)
+                    : null,
             ])->values(),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -388,6 +393,109 @@ class EgressProxyController extends Controller
         return $this->success($payload);
     }
 
+    /**
+     * Execute a real probe from selected panel nodes. The panel never claims
+     * that its own local reachability is equivalent to the node data path.
+     */
+    public function probe(Request $request)
+    {
+        $params = $request->validate([
+            'id' => 'required|integer|min:1|exists:v2_egress_proxy,id',
+            'server_ids' => 'required|array|min:1|max:10',
+            'server_ids.*' => 'integer|min:1|distinct|exists:v2_server,id',
+            'target' => 'nullable|url:http,https|max:2048',
+        ]);
+        $proxy = EgressProxy::findOrFail((int) $params['id']);
+        $target = trim((string) ($params['target'] ?? ''));
+        $requests = [];
+
+        foreach (Server::query()->whereIn('id', $params['server_ids'])->get() as $server) {
+            $requestId = bin2hex(random_bytes(16));
+            $base = [
+                'request_id' => $requestId,
+                'server_id' => (int) $server->id,
+                'server_name' => $server->name,
+                'proxy_id' => (int) $proxy->id,
+            ];
+            if (!NodeSyncService::isNodeOnline((int) $server->id)) {
+                $requests[] = $base + [
+                    'ok' => false,
+                    'latency_ms' => 0,
+                    'message' => '节点离线，无法执行节点侧探测。',
+                    'target' => $target ?: '/',
+                ];
+                continue;
+            }
+            $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
+            if (!in_array('node_egress_probe', $capabilities['features'] ?? [], true)) {
+                $requests[] = $base + [
+                    'ok' => false,
+                    'latency_ms' => 0,
+                    'message' => '节点版本尚不支持节点侧出站探测，请升级 Node。',
+                    'target' => $target ?: '/',
+                ];
+                continue;
+            }
+
+            Cache::put("node_egress_probe:{$requestId}", ['status' => 'pending'], 30);
+            $sent = NodeSyncService::push((int) $server->id, 'probe.egress', [
+                'request_id' => $requestId,
+                'proxy' => $proxy->toNodeConfig(),
+                'target' => $target,
+            ]);
+            $requests[] = $base + [
+                'request_id' => $requestId,
+                'sent' => $sent,
+            ];
+        }
+
+        $pending = collect($requests)
+            ->filter(fn (array $result) => isset($result['sent']) && $result['sent'])
+            ->keyBy('request_id');
+        $deadline = microtime(true) + 14.0;
+        while ($pending->isNotEmpty() && microtime(true) < $deadline) {
+            foreach ($pending->keys() as $requestId) {
+                $result = Cache::get("node_egress_probe:{$requestId}");
+                if (is_array($result) && ($result['status'] ?? '') !== 'pending') {
+                    $pending->forget($requestId);
+                }
+            }
+            if ($pending->isNotEmpty()) {
+                usleep(150_000);
+            }
+        }
+
+        $items = collect($requests)->map(function (array $request) {
+            if (empty($request['request_id'])) {
+                return $request;
+            }
+            if (empty($request['sent'])) {
+                return array_diff_key($request, ['sent' => true]) + [
+                    'ok' => false,
+                    'latency_ms' => 0,
+                    'message' => '节点 WebSocket 暂不可用，请稍后重试。',
+                    'target' => $request['target'] ?? '/',
+                ];
+            }
+            $result = Cache::get("node_egress_probe:{$request['request_id']}");
+            if (!is_array($result) || ($result['status'] ?? '') === 'pending') {
+                return array_diff_key($request, ['sent' => true]) + [
+                    'ok' => false,
+                    'latency_ms' => 0,
+                    'message' => '节点侧探测超时。',
+                    'target' => $request['target'] ?? '/',
+                ];
+            }
+            return array_merge($request, $result);
+        })->values();
+
+        return $this->success([
+            'items' => $items,
+            'proxy_id' => (int) $proxy->id,
+            'proxy_name' => $proxy->name,
+        ]);
+    }
+
     private function publicProxy(EgressProxy $proxy): array
     {
         return [
@@ -404,7 +512,34 @@ class EgressProxyController extends Controller
             'config' => $proxy->config ?? [],
             'enabled' => $proxy->enabled,
             'servers_count' => $proxy->servers_count ?? $proxy->servers()->count(),
+            'health' => $this->healthSummary($proxy),
             'updated_at' => optional($proxy->updated_at)->toIso8601String(),
+        ];
+    }
+
+    private function healthSummary(EgressProxy $proxy): ?array
+    {
+        $nodes = Server::query()
+            ->where('egress_proxy_id', $proxy->id)
+            ->pluck('id');
+        if ($nodes->isEmpty()) {
+            return null;
+        }
+        $health = $nodes
+            ->map(fn ($serverId) => Cache::get("egress_health:{$proxy->id}:{$serverId}"))
+            ->filter(fn ($item) => is_array($item))
+            ->values();
+        if ($health->isEmpty()) {
+            return null;
+        }
+        $latest = $health->sortByDesc(fn ($item) => (int) ($item['completed_at'] ?? 0))->first();
+        return [
+            'tested_nodes' => $health->count(),
+            'healthy_nodes' => $health->where('ok', true)->count(),
+            'last_ok' => (bool) ($latest['ok'] ?? false),
+            'last_message' => (string) ($latest['message'] ?? ''),
+            'last_probed_at' => (int) ($latest['completed_at'] ?? 0),
+            'last_exit_ip' => (string) ($latest['exit_ip'] ?? ''),
         ];
     }
 

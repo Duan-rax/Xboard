@@ -7,6 +7,7 @@
   root.state = {
     routes: [],
     targets: [],
+    nodes: [],
     editingId: 0,
     loading: false,
     search: '',

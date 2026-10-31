@@ -24,6 +24,7 @@ class NodeCapabilityService
     {
         $kernel = trim((string) ($metrics['kernel'] ?? ''));
         $version = trim((string) ($metrics['kernel_version'] ?? ''));
+        $domainStrategy = trim((string) ($metrics['domain_strategy'] ?? ''));
         $rawFeatures = $metrics['features'] ?? null;
         $features = [];
         if (is_array($rawFeatures)) {
@@ -44,6 +45,7 @@ class NodeCapabilityService
             'known' => $kernel !== '' && is_array($rawFeatures),
             'kernel' => $kernel,
             'kernel_version' => $version,
+            'domain_strategy' => $domainStrategy,
             'features' => $features,
         ];
     }

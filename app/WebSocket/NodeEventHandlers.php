@@ -87,6 +87,43 @@ class NodeEventHandlers
         Log::debug("[WS] Node#{$nodeId} synced " . count($newDevices) . " users, removed " . count($removedUsers));
     }
 
+    public static function handleEgressProbeReport(TcpConnection $conn, int $nodeId, array $data): void
+    {
+        $requestId = trim((string) ($data['request_id'] ?? ''));
+        if (!preg_match('/^[a-f0-9]{32}$/', $requestId)) {
+            return;
+        }
+        $pending = Cache::get("node_egress_probe:{$requestId}");
+        if (!is_array($pending) || ($pending['status'] ?? '') !== 'pending') {
+            return;
+        }
+        $result = [
+            'status' => 'done',
+            'ok' => (bool) ($data['ok'] ?? false),
+            'latency_ms' => max(0, (int) ($data['latency_ms'] ?? 0)),
+            'message' => mb_substr((string) ($data['message'] ?? ''), 0, 600),
+            'exit_ip' => mb_substr((string) ($data['exit_ip'] ?? ''), 0, 128),
+            'target' => mb_substr((string) ($data['target'] ?? ''), 0, 2048),
+            'tls_verified' => (bool) ($data['tls_verified'] ?? false),
+            'completed_at' => (int) ($data['completed_at'] ?? time()),
+            'node_id' => $nodeId,
+            'proxy_id' => (int) ($data['proxy_id'] ?? 0),
+        ];
+        Cache::put("node_egress_probe:{$requestId}", $result, 120);
+        if ($result['proxy_id'] > 0) {
+            Cache::put(
+                "egress_health:{$result['proxy_id']}:{$nodeId}",
+                $result,
+                now()->addDays(30)
+            );
+        }
+        Log::debug("[WS] Node#{$nodeId} completed egress probe", [
+            'request_id' => $requestId,
+            'ok' => $result['ok'],
+            'proxy_id' => $result['proxy_id'],
+        ]);
+    }
+
     /**
      * Handle device state request from node
      */

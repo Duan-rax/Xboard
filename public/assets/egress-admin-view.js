@@ -64,6 +64,7 @@
     #${BIND_PAGE_ID} .xe-node-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
     #${BIND_PAGE_ID} .xe-node-name{font-size:13px;font-weight:600;color:#0f172a}
     #${BIND_PAGE_ID} .xe-node-side{flex:none;text-align:right}
+    #${BIND_PAGE_ID} .xe-node-probe{margin-top:6px}
     #${BIND_PAGE_ID} .xe-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:14px;border-top:1px solid hsl(var(--border,214 32% 91%))}
     #${BIND_PAGE_ID} .xe-foot .xe-small{margin-right:auto}
     #${PAGE_ID} .xe-hint{color:#64748b;font-size:11px;line-height:1.55;margin-top:4px}
@@ -279,18 +280,24 @@
         : other
           ? `<span class="xe-badge xe-bound">已绑定 ${esc(boundLabel)}</span>`
           : '<span class="xe-badge">未绑定</span>';
+      const health = node.probe_health;
+      const healthText = health
+        ? `${health.ok ? '探测成功' : '探测失败'}${health.latency_ms ? ` · ${Number(health.latency_ms)} ms` : ''}${health.exit_ip ? ` · ${esc(health.exit_ip)}` : ''}`
+        : '尚未从该节点探测';
       return `
-        <label class="xe-node">
+        <div class="xe-node">
           <input type="checkbox" data-xe-node="${node.id}" ${state.selected.has(Number(node.id)) ? 'checked' : ''}>
           <span class="xe-node-main">
             <span class="xe-node-name">${esc(node.name || `节点 #${node.id}`)}</span>
             <span class="xe-small">${esc(node.host)}:${node.port} · #${node.id}</span>
+            <span class="xe-small">${healthText}</span>
           </span>
           <span class="xe-node-side">
             ${badge}
             <div class="xe-small">${node.enabled ? '已启用' : '已停用'}</div>
+            <button class="xe-secondary xe-node-probe" data-xe-probe-node="${node.id}" data-xe-probe-proxy="${currentId}">节点探测</button>
           </span>
-        </label>`;
+        </div>`;
     }).join('');
     updateBindSelection();
   };

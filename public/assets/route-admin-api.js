@@ -19,6 +19,7 @@
     nodes: (query) => adapter.api(`/nodes?${query.toString()}`),
     preview: (payload) => adapter.api('/preview', 'POST', payload),
     save: (payload) => adapter.api('/save', 'POST', payload),
+    simulate: (payload) => adapter.api('/simulate', 'POST', payload),
     sort: (items) => adapter.api('/sort', 'POST', {
       items: items.map((route, index) => ({
         id: Number(route.id),

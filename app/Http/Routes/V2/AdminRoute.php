@@ -82,6 +82,7 @@ class AdminRoute
                 $router->post('/sort', [RouteController::class, 'sort']);
                 $router->get('/options', [RouteController::class, 'options']);
                 $router->post('/preview', [RouteController::class, 'preview']);
+                $router->post('/simulate', [RouteController::class, 'simulate']);
                 $router->post('/sync-status', [RouteController::class, 'syncStatus']);
                 $router->get('/nodes', [RouteController::class, 'nodes']);
                 $router->post('/bind', [RouteController::class, 'bind']);
@@ -100,6 +101,7 @@ class AdminRoute
                 $router->post('/bind-status', [EgressProxyController::class, 'bindStatus']);
                 $router->post('/unbind-all', [EgressProxyController::class, 'unbindAll']);
                 $router->post('/test', [EgressProxyController::class, 'test']);
+                $router->post('/probe', [EgressProxyController::class, 'probe']);
             });
             // 节点管理接口
             $router->group([

@@ -154,6 +154,17 @@
     bound: values('xe-node-bound') || 'all',
   });
 
+  const readSimulator = () => ({
+    server_id: Number(values('xe-sim-node') || 0),
+    destination: values('xe-sim-destination'),
+    destination_ip: values('xe-sim-ip') || undefined,
+    port: values('xe-sim-port') ? Number(values('xe-sim-port')) : undefined,
+    network: values('xe-sim-network') || undefined,
+    source_ip: values('xe-sim-source-ip') || undefined,
+    source_port: values('xe-sim-source-port') ? Number(values('xe-sim-source-port')) : undefined,
+    protocol: values('xe-sim-protocol') || undefined,
+  });
+
   const matchesSearch = (route) => {
     if (!state.search) return true;
     const haystack = [
@@ -184,6 +195,7 @@
     matchesSearch,
     read,
     readBindingQuery,
+    readSimulator,
     reset,
     updateTargetState,
   });

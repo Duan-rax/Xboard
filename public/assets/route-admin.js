@@ -36,7 +36,9 @@
       const [routes, options] = await api.fetchCatalog();
       state.routes = Array.isArray(routes) ? routes : [];
       state.targets = Array.isArray(options?.targets) ? options.targets : [];
+      state.nodes = Array.isArray(options?.nodes) ? options.nodes : [];
       view.renderTargets();
+      view.renderSimulatorNodes();
       view.renderList();
     } catch (error) {
       if (list) list.innerHTML = `<p class="xe-error">${root.esc(error.message)}</p>`;
@@ -220,6 +222,40 @@
     }
   };
 
+  const simulate = async () => {
+    const payload = form.readSimulator();
+    const resultBox = adapter.get('xe-sim-result');
+    const message = adapter.get('xe-sim-message');
+    if (!payload.server_id || !payload.destination) {
+      if (message) {
+        message.className = 'xe-error';
+        message.textContent = '请选择节点并填写域名或 IP。';
+      }
+      return;
+    }
+    if (message) {
+      message.className = 'xe-message';
+      message.textContent = '正在按节点规则顺序模拟…';
+    }
+    try {
+      const result = await api.simulate(payload);
+      if (resultBox) resultBox.textContent = JSON.stringify(result, null, 2);
+      const effective = result?.matched_rule || result?.possible_rule;
+      if (message) {
+        message.className = effective ? 'xe-message' : 'xe-warning';
+        message.textContent = effective
+          ? `${result.matched_rule ? '确定命中' : '可能命中'}规则 #${effective.route_id}，最终 ${result.final_action} → ${result.final_outbound}`
+          : `未命中面板规则，最终 ${result.final_action} → ${result.final_outbound}`;
+      }
+    } catch (error) {
+      if (resultBox) resultBox.textContent = error.message;
+      if (message) {
+        message.className = 'xe-error';
+        message.textContent = error.message;
+      }
+    }
+  };
+
   const handleClick = async (event) => {
     const nodeCheck = event.target.closest?.('[data-xe-node-check]');
     if (nodeCheck) {
@@ -272,6 +308,10 @@
     }
     if (event.target.closest('[data-xe-preview]')) {
       await preview();
+      return;
+    }
+    if (event.target.closest('[data-xe-simulate]')) {
+      await simulate();
       return;
     }
     const saveButton = event.target.closest('[data-xe-save]');

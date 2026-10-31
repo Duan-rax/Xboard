@@ -61,6 +61,9 @@
     #${PAGE_ID} .xe-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block}#${PAGE_ID} .xe-dot.on{background:#22c55e}
     #${PAGE_ID} .xe-warning{color:#b45309;font-size:11px}
     #${PAGE_ID} .xe-pagination{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
+    #${PAGE_ID} .xe-simulator{margin-top:18px}
+    #${PAGE_ID} .xe-sim-grid{display:grid;grid-template-columns:1.15fr 1.15fr .55fr .65fr .9fr .65fr .7fr auto;gap:8px;align-items:end}
+    #${PAGE_ID} .xe-sim-result{margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;max-height:320px;overflow:auto}
     @media(max-width:980px){#${PAGE_ID} .xe-layout{grid-template-columns:1fr}#${PAGE_ID} .xe-grid3{grid-template-columns:1fr 1fr}}
   `;
 
@@ -188,6 +191,22 @@
             <div id="xe-list">正在加载…</div>
           </section>
         </div>
+        <section class="xe-panel xe-simulator">
+          <h2>路由模拟器</h2>
+          <p>按选中节点实际绑定的面板规则评估目标。GeoIP、GeoSite 与 Rule Set 会被标为“可能命中”，不会把未知结果冒充为确定命中。</p>
+          <div class="xe-sim-grid">
+            <div><label for="xe-sim-node">节点</label><select id="xe-sim-node"><option value="">请选择节点</option></select></div>
+            <div><label for="xe-sim-destination">域名或 IP</label><input id="xe-sim-destination" placeholder="api.openai.com"></div>
+            <div><label for="xe-sim-ip">解析 IP</label><input id="xe-sim-ip" placeholder="104.18.x.x"></div>
+            <div><label for="xe-sim-port">端口</label><input id="xe-sim-port" type="number" min="1" max="65535" value="443"></div>
+            <div><label for="xe-sim-network">网络</label><select id="xe-sim-network"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
+            <div><label for="xe-sim-protocol">嗅探协议</label><select id="xe-sim-protocol"><option value="">不指定</option><option value="tls">TLS</option><option value="http">HTTP</option><option value="quic">QUIC</option><option value="bittorrent">BitTorrent</option></select></div>
+            <div><label for="xe-sim-source-ip">来源 IP</label><input id="xe-sim-source-ip" placeholder="可选"></div>
+            <button data-xe-simulate>模拟</button>
+          </div>
+          <div id="xe-sim-message" class="xe-message"></div>
+          <div id="xe-sim-result" class="xe-sim-result">选择节点并填写目标后运行模拟。</div>
+        </section>
         <div id="xe-bind-modal" class="xe-modal" hidden>
           <section class="xe-dialog">
             <div class="xe-dialog-head">
@@ -278,6 +297,14 @@
     ).join('');
   };
 
+  const renderSimulatorNodes = () => {
+    const select = adapter.get('xe-sim-node');
+    if (!select) return;
+    select.innerHTML = '<option value="">请选择节点</option>' + state.nodes.map((node) =>
+      `<option value="${node.id}">${esc(node.name || `#${node.id}`)} · ${esc(node.kernel || node.type || '未知内核')}${node.enabled ? '' : ' · 已停用'}</option>`
+    ).join('');
+  };
+
   const renderBindingNodes = () => {
     const list = adapter.get('xe-node-list');
     if (!list) return;
@@ -294,6 +321,7 @@
               <td>
                 <span class="xe-badge info">${esc(node.capabilities?.kernel || '未上报')}</span><br>
                 <span class="xe-mono" title="${esc((node.capabilities?.features || []).join('\n'))}">${esc(node.capabilities?.kernel_version || '版本未知')}</span><br>
+                ${node.capabilities?.domain_strategy ? `<span class="xe-help">domainStrategy ${esc(node.capabilities.domain_strategy)}</span><br>` : ''}
                 <span class="xe-help">${(node.capabilities?.features || []).length} 项能力</span>
               </td>
               <td><span class="xe-badge">${esc(node.type || '-')}</span></td>
@@ -322,6 +350,7 @@
     pageHtml,
     renderBindingNodes,
     renderList,
+    renderSimulatorNodes,
     renderTargets,
     showBindMessage,
     showMessage,
