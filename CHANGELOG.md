@@ -29,6 +29,9 @@ Release dates use the `Asia/Singapore` timezone.
 - Add a route simulator with node selection, destination/IP/port/network/source
   and sniff-protocol inputs, deterministic match traces, expanded rule labels,
   shadowed-rule reporting and explicit indeterminate GeoIP/GeoSite results.
+- Resolve GeoIP and GeoSite membership in the route simulator using the panel's
+  IP database and a cached MetaCubeX domain-list catalog. Unresolved rules no
+  longer infer a final block action from the first possible rule.
 - Report Xray `domain_strategy` in node capabilities and warn when IP/CIDR route
   evaluation may be affected by `AsIs`.
 - Validate outbound transport compatibility and generate WS, gRPC, HTTP and

@@ -247,9 +247,15 @@
       const effective = result?.matched_rule || result?.possible_rule;
       if (message) {
         message.className = effective ? 'xe-message' : 'xe-warning';
-        message.textContent = effective
-          ? `${result.matched_rule ? '确定命中' : '可能命中'}规则 #${effective.route_id}，最终 ${result.final_action} → ${result.final_outbound}`
-          : `未命中面板规则，最终 ${result.final_action} → ${result.final_outbound}`;
+        if (result?.matched_rule) {
+          message.textContent = `确定命中规则 #${effective.route_id}，最终 ${result.final_action} → ${result.final_outbound}`;
+        } else if (result?.possible_rule) {
+          message.className = 'xe-warning';
+          message.textContent = `可能命中规则 #${effective.route_id}，仍有集合成员关系无法确认，不推断最终动作。`;
+        } else {
+          message.className = 'xe-message';
+          message.textContent = `未命中面板规则，最终 ${result.final_action} → ${result.final_outbound}`;
+        }
       }
     } catch (error) {
       if (resultBox) resultBox.textContent = error.message;

@@ -8,6 +8,8 @@ use App\Models\EgressProxy;
 use App\Models\Server;
 use App\Models\ServerRoute;
 use App\Services\EgressBindingService;
+use App\Services\GeoIpMatcher;
+use App\Services\GeoSiteMatcher;
 use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\RouteRuleAnalyzer;
@@ -230,8 +232,15 @@ class RouteController extends Controller
         if ($destinationIp === '' && filter_var($destination, FILTER_VALIDATE_IP) !== false) {
             $destinationIp = $destination;
         }
+        $resolvedByPanel = false;
+        if ($destinationIp === '' && $domain !== '') {
+            $destinationIp = $this->resolveDestinationIp($domain);
+            $resolvedByPanel = $destinationIp !== '';
+        }
         $capabilities = NodeCapabilityService::fromMetrics($server->metrics);
         $metrics = $server->metrics ?? [];
+        $geoSiteMatcher = app(GeoSiteMatcher::class);
+        $geoIpMatcher = app(GeoIpMatcher::class);
         $result = RouteRuleSimulator::simulate($routes, [
             'id' => (int) $server->id,
             'name' => $server->name,
@@ -253,7 +262,16 @@ class RouteController extends Controller
             'source_ip' => trim((string) ($params['source_ip'] ?? '')),
             'source_port' => isset($params['source_port']) ? (int) $params['source_port'] : null,
             'protocol' => strtolower((string) ($params['protocol'] ?? '')),
+        ], [
+            'geosite' => fn (array $tags, string $targetDomain) =>
+                $geoSiteMatcher->matchesAny($targetDomain, $tags),
+            'geoip' => fn (array $codes, string $targetIp) =>
+                $geoIpMatcher->matchesAny($codes, $targetIp),
         ]);
+        $result['resolved_ip'] = $destinationIp !== '' ? $destinationIp : null;
+        if ($resolvedByPanel) {
+            $result['warnings'][] = '目标 IP 由面板自动解析，可能与节点实际解析结果不同。';
+        }
         return $this->success($result);
     }
 
@@ -713,6 +731,25 @@ class RouteController extends Controller
     {
         return collect($routeIds ?? [])->map(fn ($id) => (int) $id)
             ->filter(fn ($id) => $id > 0)->unique()->values()->all();
+    }
+
+    private function resolveDestinationIp(string $domain): string
+    {
+        $domain = strtolower(trim(rtrim($domain, '.')));
+        if ($domain === '') {
+            return '';
+        }
+        $records = @dns_get_record($domain, DNS_A | DNS_AAAA);
+        if (!is_array($records)) {
+            return '';
+        }
+        foreach ($records as $record) {
+            $ip = (string) ($record['ip'] ?? $record['ipv6'] ?? '');
+            if (filter_var($ip, FILTER_VALIDATE_IP) !== false) {
+                return $ip;
+            }
+        }
+        return '';
     }
 
     private function boundServerIds(array $routeIds): Collection

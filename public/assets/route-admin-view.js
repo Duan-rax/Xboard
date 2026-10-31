@@ -209,7 +209,7 @@
         </section>
         <section class="xe-panel xe-simulator">
           <h2>路由模拟器</h2>
-          <p>按选中节点实际绑定的面板规则评估目标。GeoIP、GeoSite 与 Rule Set 会被标为“可能命中”，不会把未知结果冒充为确定命中。</p>
+          <p>按选中节点实际绑定的面板规则评估目标。GeoSite 和 GeoIP 会查询面板缓存的实际成员关系；只有无法取得的数据才标为“可能命中”。</p>
           <div class="xe-sim-grid">
             <div><label for="xe-sim-node">节点</label><select id="xe-sim-node"><option value="">请选择节点</option></select></div>
             <div><label for="xe-sim-destination">域名或 IP</label><input id="xe-sim-destination" placeholder="api.openai.com"></div>

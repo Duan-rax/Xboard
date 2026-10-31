@@ -6,10 +6,15 @@ class RouteRuleSimulator
 {
     /**
      * Simulate the panel-managed route ordering for one node and target.
-     * GeoIP/GeoSite/rule-set membership is reported as indeterminate because
-     * the panel does not own the node's downloaded databases.
+     * GeoIP/GeoSite membership can be resolved by callers that provide the
+     * corresponding matcher. Rule-set membership remains indeterminate.
      */
-    public static function simulate(iterable $routes, array $node, array $target): array
+    public static function simulate(
+        iterable $routes,
+        array $node,
+        array $target,
+        array $resolvers = []
+    ): array
     {
         $ordered = is_array($routes) ? array_values($routes) : iterator_to_array($routes, false);
         usort($ordered, function ($left, $right) {
@@ -25,7 +30,12 @@ class RouteRuleSimulator
                 continue;
             }
             $criteria = self::criteria($route);
-            $evaluation = self::evaluate($criteria, (string) self::value($route, 'match_mode', 'any'), $target);
+            $evaluation = self::evaluate(
+                $criteria,
+                (string) self::value($route, 'match_mode', 'any'),
+                $target,
+                $resolvers
+            );
             $item = [
                 'route_id' => (int) self::value($route, 'id', 0),
                 'remarks' => (string) self::value($route, 'remarks', ''),
@@ -46,7 +56,7 @@ class RouteRuleSimulator
             }
         }
 
-        $effective = $firstMatch ?? $firstPossible;
+        $effective = $firstMatch;
         $shadowed = [];
         if ($firstMatch !== null) {
             $seen = false;
@@ -66,8 +76,6 @@ class RouteRuleSimulator
         }
 
         $warnings = [];
-        $finalAction = 'direct';
-        $finalOutbound = 'direct';
         if ($effective !== null) {
             $finalAction = $effective['action'];
             $finalOutbound = $finalAction === 'proxy'
@@ -80,13 +88,26 @@ class RouteRuleSimulator
                 $finalOutbound = 'block';
                 $warnings[] = '目标管理出站尚未授权到该节点；运行时会 fail-closed，将规则转换为阻断。';
             }
-        } elseif (!empty($node['egress_proxy_id']) && !empty($node['egress_proxy_enabled'])) {
-            $finalAction = 'proxy';
-            $finalOutbound = 'panel-egress-' . (int) $node['egress_proxy_id'];
+        } elseif ($firstPossible === null) {
+            if (!empty($node['egress_proxy_id']) && !empty($node['egress_proxy_enabled'])) {
+                $finalAction = 'proxy';
+                $finalOutbound = 'panel-egress-' . (int) $node['egress_proxy_id'];
+            } else {
+                $finalAction = 'direct';
+                $finalOutbound = 'direct';
+            }
+        } else {
+            $finalAction = null;
+            $finalOutbound = null;
         }
 
         if ($firstPossible !== null && $firstMatch === null) {
-            $warnings[] = '首条可能命中的规则依赖 GeoIP、GeoSite 或 Rule Set，需在节点侧确认数据库内容。';
+            $criteria = implode('/', $firstPossible['indeterminate_criteria']);
+            $warnings[] = sprintf(
+                '首条可能命中的规则 #%d 无法确定 %s 成员关系，因此不推断最终动作。',
+                $firstPossible['route_id'],
+                $criteria
+            );
         }
         if (!empty($node['custom_routes'])) {
             $warnings[] = '节点还包含 local custom_routes；它们优先于面板规则，模拟器无法读取本地文件后的最终顺序。';
@@ -110,8 +131,15 @@ class RouteRuleSimulator
         ];
     }
 
-    private static function evaluate(array $criteria, string $matchMode, array $target): array
+    private static function evaluate(
+        array $criteria,
+        string $matchMode,
+        array $target,
+        array $resolvers
+    ): array
     {
+        $domain = strtolower(trim((string) ($target['domain'] ?? '')));
+        $destinationIp = trim((string) ($target['destination_ip'] ?? ''));
         $statuses = [
             'domains' => self::domainStatus($criteria['domains'] ?? [], $target),
             'domain_suffixes' => self::suffixStatus($criteria['domain_suffixes'] ?? [], $target),
@@ -123,8 +151,16 @@ class RouteRuleSimulator
             'source_cidrs' => self::networkStatus($criteria['source_cidrs'] ?? [], $target['source_ip'] ?? ''),
             'source_ports' => self::rangeStatus($criteria['source_ports'] ?? [], $target['source_port'] ?? null),
             'protocols' => self::exactStatus($criteria['protocols'] ?? [], $target['protocol'] ?? ''),
-            'geoip' => self::unknownStatus($criteria['geoip'] ?? []),
-            'geosite' => self::unknownStatus($criteria['geosite'] ?? []),
+            'geoip' => self::geoIpStatus(
+                $criteria['geoip'] ?? [],
+                $destinationIp,
+                $resolvers['geoip'] ?? null
+            ),
+            'geosite' => self::geoSiteStatus(
+                $criteria['geosite'] ?? [],
+                $domain,
+                $resolvers['geosite'] ?? null
+            ),
             'rule_sets' => self::unknownStatus($criteria['rule_sets'] ?? []),
         ];
         $active = array_filter($statuses, fn ($status) => $status !== null);
@@ -233,6 +269,38 @@ class RouteRuleSimulator
     private static function unknownStatus(array $values): mixed
     {
         return $values === [] ? null : 'unknown';
+    }
+
+    private static function geoSiteStatus(array $values, string $domain, mixed $resolver): mixed
+    {
+        if ($values === []) {
+            return null;
+        }
+        if ($domain === '' || !is_callable($resolver)) {
+            return 'unknown';
+        }
+        try {
+            $result = $resolver($values, $domain);
+            return is_bool($result) ? $result : 'unknown';
+        } catch (\Throwable) {
+            return 'unknown';
+        }
+    }
+
+    private static function geoIpStatus(array $values, string $ip, mixed $resolver): mixed
+    {
+        if ($values === []) {
+            return null;
+        }
+        if ($ip === '' || !is_callable($resolver)) {
+            return 'unknown';
+        }
+        try {
+            $result = $resolver($values, $ip);
+            return is_bool($result) ? $result : 'unknown';
+        } catch (\Throwable) {
+            return 'unknown';
+        }
     }
 
     private static function ipInCidr(string $ip, string $cidr): bool

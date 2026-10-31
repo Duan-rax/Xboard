@@ -70,6 +70,52 @@ class RouteRuleSimulatorTest extends TestCase
         $this->assertNull($result['matched_rule']);
         $this->assertSame(4, $result['possible_rule']['route_id']);
         $this->assertContains('geosite', $result['possible_rule']['indeterminate_criteria']);
+        $this->assertNull($result['final_action']);
+        $this->assertNull($result['final_outbound']);
+    }
+
+    public function testResolvedCollectionMissesDoNotInferAnActionFromEarlierRules(): void
+    {
+        $routes = [
+            $this->route(38, 5, ['geosite' => ['category-ads-all']], 'block'),
+            $this->route(34, 10, ['geoip' => ['cn']], 'block'),
+        ];
+
+        $result = RouteRuleSimulator::simulate($routes, [], [
+            'destination' => 'atcc.org',
+            'domain' => 'atcc.org',
+            'destination_ip' => '203.0.113.8',
+            'port' => 443,
+        ], [
+            'geosite' => fn (array $tags, string $domain) => false,
+            'geoip' => fn (array $codes, string $ip) => false,
+        ]);
+
+        $this->assertNull($result['matched_rule']);
+        $this->assertNull($result['possible_rule']);
+        $this->assertSame('direct', $result['final_action']);
+        $this->assertSame('direct', $result['final_outbound']);
+    }
+
+    public function testResolvedCollectionMatchProducesDeterministicAction(): void
+    {
+        $routes = [
+            $this->route(40, 60, ['geosite' => ['category-ai-!cn']], 'proxy', 'panel-egress-1'),
+        ];
+
+        $result = RouteRuleSimulator::simulate($routes, [
+            'available_egress_ids' => [1],
+        ], [
+            'destination' => 'api.openai.com',
+            'domain' => 'api.openai.com',
+            'port' => 443,
+        ], [
+            'geosite' => fn (array $tags, string $domain) => true,
+        ]);
+
+        $this->assertSame(40, $result['matched_rule']['route_id']);
+        $this->assertSame('proxy', $result['final_action']);
+        $this->assertSame('panel-egress-1', $result['final_outbound']);
     }
 
     public function testUsesBoundEgressAsDefaultWhenNoRuleMatches(): void
