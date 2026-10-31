@@ -4,6 +4,16 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Add a node-side egress probe. An administrator can select a node and verify
+  the real `node → egress → target` path, including latency, TLS completion and
+  exit IP; the latest per-node result is cached without storing user traffic.
+- Add a route simulator with node selection, destination/IP/port/network/source
+  and sniff-protocol inputs, deterministic match traces, expanded rule labels,
+  shadowed-rule reporting and explicit indeterminate GeoIP/GeoSite results.
+- Report Xray `domain_strategy` in node capabilities and warn when IP/CIDR route
+  evaluation may be affected by `AsIs`.
+- Validate outbound transport compatibility and generate WS, gRPC, HTTP and
+  HTTPUpgrade stream settings for VLESS/Trojan.
 - Make fork CI and Docker workflows manual-only so pushing source code does not
   consume GitHub Actions minutes or publish binaries automatically.
 - Remove the experimental user-traffic audit module, collector bootstrap,

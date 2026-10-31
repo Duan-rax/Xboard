@@ -86,4 +86,38 @@ class EgressProxyValidatorTest extends TestCase
         $this->assertSame('key', $normalized['reality']['public_key']);
         $this->assertSame('0123', $normalized['reality']['short_id']);
     }
+
+    public function test_transport_and_flow_compatibility_are_validated(): void
+    {
+        $invalidNetwork = EgressProxyValidator::errors(
+            'vless',
+            [
+                'uuid' => '6f0c30dc-5e98-4eb1-a52a-042ea7861e08',
+                'network' => 'kcp',
+            ],
+            null
+        );
+        $this->assertArrayHasKey('config.network', $invalidNetwork);
+
+        $invalidFlow = EgressProxyValidator::errors(
+            'vless',
+            [
+                'uuid' => '6f0c30dc-5e98-4eb1-a52a-042ea7861e08',
+                'flow' => 'unsupported-flow',
+            ],
+            null
+        );
+        $this->assertArrayHasKey('config.flow', $invalidFlow);
+
+        $valid = EgressProxyValidator::errors(
+            'vless',
+            [
+                'uuid' => '6f0c30dc-5e98-4eb1-a52a-042ea7861e08',
+                'network' => 'ws',
+                'path' => '/gateway',
+            ],
+            null
+        );
+        $this->assertSame([], $valid);
+    }
 }

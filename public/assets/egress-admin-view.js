@@ -215,6 +215,9 @@
               <td>
                 <div class="xe-name">${esc(proxy.name)} ${proxy.enabled ? '<span class="xe-badge xe-on">启用</span>' : '<span class="xe-badge xe-off">停用</span>'}</div>
                 <span class="xe-small">#${proxy.id}${proxy.updated_at ? ` · ${esc(root.form.formatTime(proxy.updated_at))}` : ''}</span>
+                ${proxy.health
+                  ? `<br><span class="xe-small">${proxy.health.last_ok ? '最近节点探测成功' : '最近节点探测失败'} · ${Number(proxy.health.healthy_nodes || 0)}/${Number(proxy.health.tested_nodes || 0)} 台可用${proxy.health.last_exit_ip ? ` · ${esc(proxy.health.last_exit_ip)}` : ''}</span>`
+                  : ''}
               </td>
               <td>
                 <span class="xe-badge">${esc(root.form.protocolLabel(proxy.protocol))}</span>
