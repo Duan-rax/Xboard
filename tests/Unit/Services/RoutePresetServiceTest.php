@@ -7,12 +7,9 @@ use PHPUnit\Framework\TestCase;
 
 class RoutePresetServiceTest extends TestCase
 {
-    public function test_builtin_ai_suffixes_cover_major_providers(): void
+    public function test_builtin_ai_collection_replaces_manual_vendor_list(): void
     {
-        $this->assertContains('openai.com', RoutePresetService::AI_DOMAIN_SUFFIXES);
-        $this->assertContains('anthropic.com', RoutePresetService::AI_DOMAIN_SUFFIXES);
-        $this->assertContains('gemini.google.com', RoutePresetService::AI_DOMAIN_SUFFIXES);
-        $this->assertContains('perplexity.ai', RoutePresetService::AI_DOMAIN_SUFFIXES);
+        $this->assertSame(['category-ai-!cn'], RoutePresetService::AI_GEOSITES);
     }
 
     public function test_definitions_are_stable_and_cover_three_categories(): void
@@ -29,6 +26,8 @@ class RoutePresetServiceTest extends TestCase
     {
         $this->assertContains('category-pt', RoutePresetService::BIT_TORRENT_GEOSITES);
         $this->assertContains('category-public-tracker', RoutePresetService::BIT_TORRENT_GEOSITES);
+        $this->assertContains('tracker', RoutePresetService::BIT_TORRENT_GEOSITES);
+        $this->assertContains('bittorrent.com', RoutePresetService::BIT_TORRENT_MANUAL_COVERED);
         $this->assertContains('openbittorrent.com', RoutePresetService::BIT_TORRENT_MANUAL_COVERED);
     }
 }

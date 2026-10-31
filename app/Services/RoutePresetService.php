@@ -16,34 +16,23 @@ class RoutePresetService
     public const BT_KEY = 'builtin-bittorrent';
     public const AI_KEY = 'builtin-ai-egress';
 
-    public const AI_DOMAIN_SUFFIXES = [
-        'openai.com',
-        'chatgpt.com',
-        'oaistatic.com',
-        'oaiusercontent.com',
-        'anthropic.com',
-        'claude.ai',
-        'generativelanguage.googleapis.com',
-        'aistudio.google.com',
-        'gemini.google.com',
-        'cohere.ai',
-        'perplexity.ai',
-        'mistral.ai',
-        'groq.com',
-        'x.ai',
-        'copilot.microsoft.com',
-        'githubcopilot.com',
-        'poe.com',
-        'huggingface.co',
-        'replicate.com',
+    public const ADS_GEOSITES = [
+        'category-ads-all',
+        'category-ads-and-telemetry',
+    ];
+
+    public const AI_GEOSITES = [
+        'category-ai-!cn',
     ];
 
     public const BIT_TORRENT_GEOSITES = [
         'category-pt',
         'category-public-tracker',
+        'tracker',
     ];
 
     public const BIT_TORRENT_MANUAL_COVERED = [
+        'bittorrent.com',
         'openbittorrent.com',
         'opentrackr.org',
     ];
@@ -66,7 +55,7 @@ class RoutePresetService
             [
                 'key' => self::AI_KEY,
                 'title' => 'AI 服务走管理出站',
-                'description' => '合并常见 AI 域名，并只绑定到所选管理出站正在使用的节点。',
+                'description' => '使用 CATEGORY-AI-!CN 集合，并只绑定到已授权所选管理出站的节点。',
                 'action' => 'proxy',
             ],
         ];
@@ -131,7 +120,7 @@ class RoutePresetService
         if ($presetKey === self::ADS_KEY) {
             $criteria['geosite'] = $this->uniqueStrings(array_merge(
                 $criteria['geosite'],
-                ['category-ads-all', 'category-ads-and-telemetry']
+                self::ADS_GEOSITES
             ));
             $criteria['protocols'] = [];
             $remarks = '阻断广告、统计与遥测';
@@ -203,7 +192,7 @@ class RoutePresetService
         $canonical = $candidates->first();
         $target = 'panel-egress-' . $proxy->id;
         $criteria = RouteRuleValidator::normalizeCriteria([
-            'domain_suffixes' => self::AI_DOMAIN_SUFFIXES,
+            'geosite' => self::AI_GEOSITES,
         ]);
 
         if ($canonical === null) {

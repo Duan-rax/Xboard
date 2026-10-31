@@ -4,10 +4,14 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Replace the manual AI vendor domain list with `CATEGORY-AI-!CN`, which
+  contains 214 domains and covers OpenAI, Anthropic, Gemini, Perplexity,
+  Hugging Face, xAI and Copilot categories.
 - Refactor the BitTorrent preset around the actual GeoSite database:
   `CATEGORY-PT` covers 126 private-tracker sites, `CATEGORY-PUBLIC-TRACKER`
-  covers 437 public Tracker domains, and `bittorrent` protocol sniffing catches
-  trackerless traffic. Remove manual entries already covered by collections.
+  covers 433 public Tracker domains, and `TRACKER` adds another 114 PT/tracker
+  domains. `bittorrent` protocol sniffing catches trackerless traffic. Remove
+  manual entries already covered by collections.
 - Separate managed-egress availability from the final catch-all outbound.
   Nodes may now receive multiple managed outbounds; routes can select any
   granted profile while at most one profile is marked as default.
