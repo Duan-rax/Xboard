@@ -14,6 +14,7 @@ class ServerRoute extends Model
         'updated_at' => 'timestamp',
         'match' => 'array',
         'criteria' => 'array',
+        'preset_key' => 'string',
         'priority' => 'integer',
         'enabled' => 'boolean',
     ];

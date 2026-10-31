@@ -10,6 +10,7 @@ use App\Services\NodeCapabilityService;
 use App\Services\NodeSyncService;
 use App\Services\RouteRuleAnalyzer;
 use App\Services\RouteRuleSimulator;
+use App\Services\RoutePresetService;
 use App\Services\RouteRuleValidator;
 use App\Services\ServerService;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use App\Models\EgressProxy;
 
 class RouteController extends Controller
 {
@@ -165,7 +167,28 @@ class RouteController extends Controller
                     ];
                 })
                 ->values(),
+            'presets' => RoutePresetService::definitions(),
+            'egress_proxies' => EgressProxy::query()
+                ->withCount('servers')
+                ->where('enabled', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'protocol'])
+                ->map(fn (EgressProxy $proxy) => [
+                    'id' => (int) $proxy->id,
+                    'name' => $proxy->name,
+                    'protocol' => $proxy->protocol,
+                    'servers_count' => (int) $proxy->servers_count,
+                ])
+                ->values(),
         ]);
+    }
+
+    public function applyPresets(Request $request, RoutePresetService $presets)
+    {
+        $params = $request->validate([
+            'egress_proxy_id' => 'required|integer|min:1|exists:v2_egress_proxy,id',
+        ]);
+        return $this->success($presets->applyAll((int) $params['egress_proxy_id']));
     }
 
     public function simulate(Request $request)

@@ -8,6 +8,8 @@
     routes: [],
     targets: [],
     nodes: [],
+    presets: [],
+    egressProxies: [],
     editingId: 0,
     loading: false,
     search: '',

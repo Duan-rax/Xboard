@@ -4,6 +4,10 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Add idempotent built-in route presets. Ads, telemetry, BitTorrent protocol,
+  BT/PT domains and Tracker lists are merged into canonical rules while
+  preserving the union of node bindings; AI domains can be bound to a selected
+  managed egress and only nodes currently using that egress.
 - Add a node-side egress probe. An administrator can select a node and verify
   the real `node → egress → target` path, including latency, TLS completion and
   exit IP; the latest per-node result is cached without storing user traffic.

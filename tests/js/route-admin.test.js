@@ -54,6 +54,7 @@ const elements = new Map();
   'xe-enabled', 'xe-domains', 'xe-domain-suffixes', 'xe-ip-cidrs', 'xe-ports',
   'xe-networks', 'xe-source-cidrs', 'xe-source-ports', 'xe-action', 'xe-target',
   'xe-target-options', 'xe-message', 'xe-preview', 'xe-diagnostic-summary', 'xe-list', 'xe-search',
+  'xe-preset-list', 'xe-preset-egress', 'xe-preset-message',
   'xe-sim-node', 'xe-sim-destination', 'xe-sim-ip', 'xe-sim-port', 'xe-sim-network',
   'xe-sim-protocol', 'xe-sim-source-ip', 'xe-sim-source-port', 'xe-sim-message', 'xe-sim-result',
   'xe-bind-modal', 'xe-bind-title', 'xe-node-search', 'xe-node-bound',
@@ -103,6 +104,8 @@ global.fetch = async (url, options = {}) => {
         ? {
             targets: [{ tag: 'warp', label: 'WARP (warp)' }],
             nodes: [{ id: 12, name: '日本 01', host: 'jp.example.com', kernel: 'xray', enabled: true }],
+            presets: [{ key: 'builtin-ads', title: '广告集合', description: '合并广告集合', action: 'block' }],
+            egress_proxies: [{ id: 1, name: 'Legend SG', protocol: 'shadowsocks', servers_count: 1 }],
           }
         : [{
             id: 7,
@@ -180,6 +183,7 @@ async function verify() {
   assert.equal(typeof globalThis.XboardRouteAdmin.view.renderList, 'function');
   assert.equal(typeof globalThis.XboardRouteAdmin.api.fetchCatalog, 'function');
   assert.equal(typeof globalThis.XboardRouteAdmin.api.simulate, 'function');
+  assert.equal(typeof globalThis.XboardRouteAdmin.api.applyPresets, 'function');
   assert.equal(existingContent.style.display, '');
 
   setTimeout(() => {
@@ -210,6 +214,8 @@ async function verify() {
   assert.match(elements.get('xe-diagnostic-summary').innerHTML, /1 个冲突/);
   assert.match(elements.get('xe-target-options').innerHTML, /warp/);
   assert.match(elements.get('xe-sim-node').innerHTML, /日本 01/);
+  assert.match(elements.get('xe-preset-list').innerHTML, /广告集合/);
+  assert.match(elements.get('xe-preset-egress').innerHTML, /Legend SG/);
 
   const otherLink = createElement({
     href: '/server/manage',

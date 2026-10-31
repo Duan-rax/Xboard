@@ -165,6 +165,8 @@
     protocol: values('xe-sim-protocol') || undefined,
   });
 
+  const readPresetEgress = () => Number(values('xe-preset-egress') || 0);
+
   const matchesSearch = (route) => {
     if (!state.search) return true;
     const haystack = [
@@ -195,6 +197,7 @@
     matchesSearch,
     read,
     readBindingQuery,
+    readPresetEgress,
     readSimulator,
     reset,
     updateTargetState,

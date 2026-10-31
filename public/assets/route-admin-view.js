@@ -62,6 +62,12 @@
     #${PAGE_ID} .xe-warning{color:#b45309;font-size:11px}
     #${PAGE_ID} .xe-pagination{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
     #${PAGE_ID} .xe-simulator{margin-top:18px}
+    #${PAGE_ID} .xe-presets{margin-bottom:18px}
+    #${PAGE_ID} .xe-preset-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+    #${PAGE_ID} .xe-preset-card{padding:12px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc}
+    #${PAGE_ID} .xe-preset-card strong{font-size:12.5px}
+    #${PAGE_ID} .xe-preset-card p{margin-top:4px}
+    #${PAGE_ID} .xe-preset-actions{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:8px;align-items:end}
     #${PAGE_ID} .xe-sim-grid{display:grid;grid-template-columns:1.15fr 1.15fr .55fr .65fr .9fr .65fr .7fr auto;gap:8px;align-items:end}
     #${PAGE_ID} .xe-sim-result{margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;max-height:320px;overflow:auto}
     @media(max-width:980px){#${PAGE_ID} .xe-layout{grid-template-columns:1fr}#${PAGE_ID} .xe-grid3{grid-template-columns:1fr 1fr}}
@@ -191,6 +197,16 @@
             <div id="xe-list">正在加载…</div>
           </section>
         </div>
+        <section class="xe-panel xe-presets">
+          <h2>内置规则模板</h2>
+          <p>模板会按稳定标识合并重复规则、合并节点绑定并重新下发配置。重复执行不会继续产生副本。</p>
+          <div id="xe-preset-list" class="xe-preset-grid"></div>
+          <div class="xe-preset-actions">
+            <div><label for="xe-preset-egress">AI 服务使用的管理出站</label><select id="xe-preset-egress"></select></div>
+            <button data-xe-apply-presets>合并并应用全部模板</button>
+          </div>
+          <div id="xe-preset-message" class="xe-message"></div>
+        </section>
         <section class="xe-panel xe-simulator">
           <h2>路由模拟器</h2>
           <p>按选中节点实际绑定的面板规则评估目标。GeoIP、GeoSite 与 Rule Set 会被标为“可能命中”，不会把未知结果冒充为确定命中。</p>
@@ -305,6 +321,24 @@
     ).join('');
   };
 
+  const renderPresets = () => {
+    const list = adapter.get('xe-preset-list');
+    if (list) {
+      list.innerHTML = state.presets.map((preset) => `
+        <article class="xe-preset-card">
+          <strong>${esc(preset.title || preset.key)}</strong>
+          <p>${esc(preset.description || '')}</p>
+          <span class="xe-badge ${preset.action === 'block' ? 'warning' : 'info'}">${preset.action === 'block' ? '阻断' : '管理出站'}</span>
+        </article>`).join('');
+    }
+    const select = adapter.get('xe-preset-egress');
+    if (select) {
+      select.innerHTML = state.egressProxies.map((proxy) =>
+        `<option value="${proxy.id}">${esc(proxy.name)} · ${esc(proxy.protocol)} · ${Number(proxy.servers_count || 0)} 台当前绑定节点</option>`
+      ).join('');
+    }
+  };
+
   const renderBindingNodes = () => {
     const list = adapter.get('xe-node-list');
     if (!list) return;
@@ -350,6 +384,7 @@
     pageHtml,
     renderBindingNodes,
     renderList,
+    renderPresets,
     renderSimulatorNodes,
     renderTargets,
     showBindMessage,

@@ -83,6 +83,7 @@ class AdminRoute
                 $router->get('/options', [RouteController::class, 'options']);
                 $router->post('/preview', [RouteController::class, 'preview']);
                 $router->post('/simulate', [RouteController::class, 'simulate']);
+                $router->post('/apply-presets', [RouteController::class, 'applyPresets']);
                 $router->post('/sync-status', [RouteController::class, 'syncStatus']);
                 $router->get('/nodes', [RouteController::class, 'nodes']);
                 $router->post('/bind', [RouteController::class, 'bind']);

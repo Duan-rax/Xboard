@@ -9,6 +9,9 @@
   }
 
   root.api = Object.freeze({
+    applyPresets: (egressProxyId) => adapter.api('/apply-presets', 'POST', {
+      egress_proxy_id: Number(egressProxyId),
+    }),
     bind: (payload) => adapter.api('/bind', 'POST', payload),
     bindStatus: (payload) => adapter.api('/bind-status', 'POST', payload),
     drop: (id) => adapter.api('/drop', 'POST', { id: Number(id) }),

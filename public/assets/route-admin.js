@@ -37,8 +37,11 @@
       state.routes = Array.isArray(routes) ? routes : [];
       state.targets = Array.isArray(options?.targets) ? options.targets : [];
       state.nodes = Array.isArray(options?.nodes) ? options.nodes : [];
+      state.presets = Array.isArray(options?.presets) ? options.presets : [];
+      state.egressProxies = Array.isArray(options?.egress_proxies) ? options.egress_proxies : [];
       view.renderTargets();
       view.renderSimulatorNodes();
+      view.renderPresets();
       view.renderList();
     } catch (error) {
       if (list) list.innerHTML = `<p class="xe-error">${root.esc(error.message)}</p>`;
@@ -256,6 +259,41 @@
     }
   };
 
+  const applyPresets = async (button) => {
+    const egressProxyId = form.readPresetEgress();
+    const message = adapter.get('xe-preset-message');
+    if (!egressProxyId) {
+      if (message) {
+        message.className = 'xe-error';
+        message.textContent = '请先选择 AI 服务使用的管理出站。';
+      }
+      return;
+    }
+    button.disabled = true;
+    if (message) {
+      message.className = 'xe-message';
+      message.textContent = '正在合并规则、整理节点绑定并下发配置…';
+    }
+    try {
+      const result = await api.applyPresets(egressProxyId);
+      const removed = ['ads', 'bittorrent', 'ai']
+        .reduce((sum, key) => sum + Number(result?.[key]?.removed_duplicates || 0), 0);
+      const affected = Number(result?.affected_server_ids?.length || 0);
+      if (message) {
+        message.className = 'xe-message';
+        message.textContent = `模板已应用：删除 ${removed} 条重复规则，更新 ${affected} 个节点绑定。`;
+      }
+      await load();
+    } catch (error) {
+      if (message) {
+        message.className = 'xe-error';
+        message.textContent = error.message;
+      }
+    } finally {
+      button.disabled = false;
+    }
+  };
+
   const handleClick = async (event) => {
     const nodeCheck = event.target.closest?.('[data-xe-node-check]');
     if (nodeCheck) {
@@ -312,6 +350,11 @@
     }
     if (event.target.closest('[data-xe-simulate]')) {
       await simulate();
+      return;
+    }
+    const applyPresetButton = event.target.closest('[data-xe-apply-presets]');
+    if (applyPresetButton) {
+      await applyPresets(applyPresetButton);
       return;
     }
     const saveButton = event.target.closest('[data-xe-save]');
