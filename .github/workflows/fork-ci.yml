@@ -1,11 +1,7 @@
 name: Fork CI
 
+# Manual-only by project policy: pushing code must not compile or release.
 on:
-  pull_request:
-    branches: [master, new-dev]
-  push:
-    branches: ['**']
-    tags: ['v*']
   workflow_dispatch:
 
 jobs:

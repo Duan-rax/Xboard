@@ -93,6 +93,7 @@ class AdminRoute
                 'prefix' => 'security-audit'
             ], function ($router) {
                 $router->get('/overview', [TrafficAuditController::class, 'overview']);
+                $router->get('/analysis', [TrafficAuditController::class, 'analysis']);
                 $router->get('/events', [TrafficAuditController::class, 'events']);
                 $router->get('/settings', [TrafficAuditController::class, 'settings']);
                 $router->post('/settings', [TrafficAuditController::class, 'saveSettings']);

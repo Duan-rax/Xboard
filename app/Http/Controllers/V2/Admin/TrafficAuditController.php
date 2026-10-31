@@ -112,6 +112,11 @@ class TrafficAuditController extends Controller
         return $this->success($data);
     }
 
+    public function analysis(Request $request)
+    {
+        return $this->success($this->service->analysis($this->filters($request)));
+    }
+
     public function settings()
     {
         return $this->success([
@@ -165,6 +170,8 @@ class TrafficAuditController extends Controller
             'action' => 'nullable|string|max:32',
             'route_id' => 'nullable|integer|min:1',
             'destination' => 'nullable|string|max:255',
+            'dimension' => 'nullable|in:service,destination',
+            'sort' => 'nullable|in:bytes,connections',
         ]);
     }
 }

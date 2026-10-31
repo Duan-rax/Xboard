@@ -1,8 +1,7 @@
 name: Fork Docker Build and Publish
 
+# Manual-only by project policy: tags and branch pushes only publish source.
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 env:

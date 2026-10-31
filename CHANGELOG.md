@@ -4,6 +4,12 @@ Release dates use the `Asia/Singapore` timezone.
 
 ## Unreleased
 
+- Add a service/destination traffic analysis view with upload, download, total,
+  connection distribution, sorting and drill-down-friendly target labels.
+- Rename the connection log to “流量审计记录” and streamline it around
+  protocol, source/user, node, destination, route, bytes and UTC+8 time.
+- Make fork CI and Docker workflows manual-only so pushing source code does not
+  consume GitHub Actions minutes or publish binaries automatically.
 - Add per-node audit coverage health to the security overview: last event,
   reporting freshness, user-link rate, route-identity rate and empty coverage
   states for enabled logical nodes.

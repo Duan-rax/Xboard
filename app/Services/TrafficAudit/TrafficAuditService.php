@@ -11,6 +11,57 @@ use Illuminate\Support\Facades\DB;
 
 class TrafficAuditService
 {
+    private const SERVICE_CATALOG = [
+        ['key' => 'connectivity', 'name' => '连接检测', 'short' => 'C', 'color' => '#64748b', 'domains' => [
+            'connectivitycheck.gstatic.com', 'connectivitycheck.android.com', 'captive.apple.com',
+            'msftconnecttest.com', 'msftncsi.com', 'detectportal.firefox.com',
+        ]],
+        ['key' => 'openai', 'name' => 'OpenAI', 'short' => 'AI', 'color' => '#10a37f', 'domains' => [
+            'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com',
+        ]],
+        ['key' => 'google', 'name' => 'Google', 'short' => 'G', 'color' => '#4285f4', 'domains' => [
+            'google.com', 'googleapis.com', 'gstatic.com', 'youtube.com', 'googlevideo.com',
+            'ytimg.com', 'googleusercontent.com',
+        ]],
+        ['key' => 'telegram', 'name' => 'Telegram', 'short' => 'T', 'color' => '#229ed9', 'domains' => [
+            'telegram.org', 'telegram.me', 't.me', 'tdesktop.com', 'telesco.pe',
+        ]],
+        ['key' => 'microsoft', 'name' => 'Microsoft', 'short' => 'M', 'color' => '#f25022', 'domains' => [
+            'microsoft.com', 'windows.com', 'live.com', 'office.com', 'sharepoint.com',
+            'microsoftonline.com', 'msn.com', 'bing.com', 'windowsupdate.com',
+        ]],
+        ['key' => 'apple', 'name' => 'Apple', 'short' => 'A', 'color' => '#475569', 'domains' => [
+            'apple.com', 'icloud.com', 'mzstatic.com',
+        ]],
+        ['key' => 'meta', 'name' => 'Meta', 'short' => 'M', 'color' => '#0866ff', 'domains' => [
+            'facebook.com', 'instagram.com', 'whatsapp.com', 'whatsapp.net', 'fbcdn.net',
+        ]],
+        ['key' => 'cloudflare', 'name' => 'Cloudflare', 'short' => 'CF', 'color' => '#f48120', 'domains' => [
+            'cloudflare.com', 'cloudflare-dns.com', 'workers.dev', 'cfdata.org',
+        ]],
+        ['key' => 'github', 'name' => 'GitHub', 'short' => 'GH', 'color' => '#24292f', 'domains' => [
+            'github.com', 'githubusercontent.com', 'githubassets.com',
+        ]],
+        ['key' => 'netflix', 'name' => 'Netflix', 'short' => 'N', 'color' => '#e50914', 'domains' => [
+            'netflix.com', 'nflxvideo.net', 'nflximg.net', 'nflxso.net',
+        ]],
+        ['key' => 'bytedance', 'name' => '字节跳动', 'short' => 'BD', 'color' => '#325ab4', 'domains' => [
+            'tiktok.com', 'tiktokcdn.com', 'byteoversea.com', 'ibytedtos.com',
+        ]],
+        ['key' => 'x', 'name' => 'X', 'short' => 'X', 'color' => '#0f172a', 'domains' => [
+            'x.com', 'twitter.com', 'twimg.com',
+        ]],
+        ['key' => 'spotify', 'name' => 'Spotify', 'short' => 'S', 'color' => '#1db954', 'domains' => [
+            'spotify.com', 'scdn.co',
+        ]],
+        ['key' => 'amazon', 'name' => 'Amazon', 'short' => 'AZ', 'color' => '#ff9900', 'domains' => [
+            'amazon.com', 'amazonaws.com', 'cloudfront.net', 'awsstatic.com',
+        ]],
+        ['key' => 'discord', 'name' => 'Discord', 'short' => 'D', 'color' => '#5865f2', 'domains' => [
+            'discord.com', 'discordapp.com', 'discord.gg',
+        ]],
+    ];
+
     public static function webhookSecret(): string
     {
         return (string) admin_setting(
@@ -156,6 +207,79 @@ class TrafficAuditService
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->paginate(max(1, min(100, $perPage)));
+    }
+
+    public function analysis(array $filters = []): array
+    {
+        [$from, $to] = self::resolveRange($filters);
+        $query = $this->filteredQuery($filters, $from, $to);
+        $dimension = ($filters['dimension'] ?? 'service') === 'destination' ? 'destination' : 'service';
+        $sort = ($filters['sort'] ?? 'bytes') === 'connections' ? 'connections' : 'bytes';
+        $totals = (clone $query)->selectRaw(
+            'COALESCE(SUM(upload_bytes),0) upload_bytes, ' .
+            'COALESCE(SUM(download_bytes),0) download_bytes, ' .
+            'COUNT(DISTINCT COALESCE(connection_id,event_id)) connections'
+        )->first();
+
+        $targetRows = (clone $query)
+            ->where(function (Builder $q): void {
+                $q->whereNotNull('destination')->orWhereNotNull('destination_ip');
+            })
+            ->selectRaw(
+                'COALESCE(destination,destination_ip) destination, ' .
+                'COUNT(DISTINCT COALESCE(connection_id,event_id)) connections, ' .
+                'COALESCE(SUM(upload_bytes),0) upload_bytes, ' .
+                'COALESCE(SUM(download_bytes),0) download_bytes'
+            )
+            ->groupBy(DB::raw('COALESCE(destination,destination_ip)'))
+            ->get();
+
+        $groups = [];
+        foreach ($targetRows as $row) {
+            $host = $this->destinationHost((string) $row->destination);
+            $metadata = $dimension === 'service'
+                ? $this->classifyService($host)
+                : ['key' => $host ?: 'unknown', 'name' => $host ?: '未知目标', 'short' => strtoupper(substr($host ?: '?', 0, 2)), 'color' => '#64748b'];
+            $key = $metadata['key'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = $metadata + [
+                    'connections' => 0,
+                    'upload_bytes' => 0,
+                    'download_bytes' => 0,
+                ];
+            }
+            $groups[$key]['connections'] += (int) $row->connections;
+            $groups[$key]['upload_bytes'] += (int) $row->upload_bytes;
+            $groups[$key]['download_bytes'] += (int) $row->download_bytes;
+        }
+
+        $rows = collect($groups)->values();
+        $rows = $rows->sortByDesc(fn (array $row): int => $sort === 'connections'
+            ? $row['connections']
+            : $row['upload_bytes'] + $row['download_bytes']
+        )->values();
+        $groupBytes = $rows->sum(fn (array $row): int => $row['upload_bytes'] + $row['download_bytes']);
+        $rows = $rows->map(function (array $row) use ($groupBytes): array {
+            $row['total_bytes'] = $row['upload_bytes'] + $row['download_bytes'];
+            $row['share'] = $groupBytes > 0
+                ? round($row['total_bytes'] * 100 / $groupBytes, 1)
+                : 0.0;
+            return $row;
+        })->take(50)->values()->all();
+
+        return [
+            'from' => $from->toIso8601String(),
+            'to' => $to->toIso8601String(),
+            'dimension' => $dimension,
+            'sort' => $sort,
+            'cards' => [
+                'upload_bytes' => (int) ($totals->upload_bytes ?? 0),
+                'download_bytes' => (int) ($totals->download_bytes ?? 0),
+                'total_bytes' => (int) ($totals->upload_bytes ?? 0) + (int) ($totals->download_bytes ?? 0),
+                'connections' => (int) ($totals->connections ?? 0),
+            ],
+            'rows' => $rows,
+        ];
     }
 
     public function platformTraffic(array $filters = []): array
@@ -340,5 +464,47 @@ class TrafficAuditService
                 'like',
                 '%' . addcslashes((string) $filters['destination'], '%_\\') . '%'
             ));
+    }
+
+    private function destinationHost(string $destination): string
+    {
+        $value = strtolower(trim($destination));
+        $value = preg_replace('/^(?:tcp|udp):/', '', $value) ?? $value;
+        if ($value === '') {
+            return '';
+        }
+        if (preg_match('/^\[([^\]]+)](?::[0-9]+)?$/', $value, $matches)) {
+            return rtrim($matches[1], '.');
+        }
+        if (substr_count($value, ':') === 1) {
+            [$host] = explode(':', $value, 2);
+            return rtrim($host, '.');
+        }
+        if (substr_count($value, ':') > 1) {
+            if (filter_var($value, FILTER_VALIDATE_IP)) {
+                return $value;
+            }
+            if (preg_match('/^(.+):[0-9]+$/', $value, $matches)) {
+                return rtrim($matches[1], '.');
+            }
+        }
+        return rtrim($value, '.');
+    }
+
+    private function classifyService(string $host): array
+    {
+        foreach (self::SERVICE_CATALOG as $service) {
+            foreach ($service['domains'] as $domain) {
+                if ($host === $domain || str_ends_with($host, '.' . $domain)) {
+                    return [
+                        'key' => $service['key'],
+                        'name' => $service['name'],
+                        'short' => $service['short'],
+                        'color' => $service['color'],
+                    ];
+                }
+            }
+        }
+        return ['key' => 'other', 'name' => '其他', 'short' => '?', 'color' => '#64748b'];
     }
 }

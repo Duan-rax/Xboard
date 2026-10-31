@@ -12,9 +12,13 @@
       title: '审计概览',
       copy: '统一查看所选时间范围内的流量总量、热门目标与节点分布。审计仅记录连接元数据，不记录正文内容。',
     },
+    analysis: {
+      title: '流量分析',
+      copy: '按服务或目标地址汇总上传、下载与连接数，快速识别流量去向和主要服务。',
+    },
     traffic: {
-      title: '流量明细',
-      copy: '按用户、节点、目标域名和动作筛选连接审计事件，并查看对应的规则与出站结果。',
+      title: '流量审计记录',
+      copy: '实时查看连接协议、来源、用户、目标地址、规则、出站和连接流量。',
     },
     rules: {
       title: '规则命中',
@@ -69,15 +73,28 @@
     action: adapter.get('sa-action')?.value || '',
   });
 
+  const syncRangeButtons = () => {
+    adapter.page()?.querySelectorAll('[data-sa-range-value]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.saRangeValue === state.range);
+    });
+  };
+
   const load = async () => {
     const serial = ++requestSerial;
     state.loading = true;
     if (state.section !== 'settings') view.showMessage('正在加载审计数据…');
     try {
       const query = { ...params(), page: pageNumber, per_page: 50 };
-      const [overview, events] = await Promise.all([api.overview(query), api.events(query)]);
+      const [overview, events, analysis] = await Promise.all([
+        api.overview(query),
+        api.events(query),
+        state.section === 'analysis'
+          ? api.analysis({ ...query, dimension: state.analysisDimension, sort: state.analysisSort })
+          : Promise.resolve(null),
+      ]);
       if (serial !== requestSerial) return;
       state.overview = overview;
+      if (analysis) state.analysis = analysis;
       const userFilter = String(adapter.get('sa-user-id')?.value || '');
       const nodeFilter = String(adapter.get('sa-node-id')?.value || '');
       const destinationFilter = String(adapter.get('sa-destination')?.value || '').trim();
@@ -102,6 +119,7 @@
       };
       pageNumber = state.pagination.current_page;
       view.renderAll();
+      syncRangeButtons();
       if (state.section !== 'settings') {
         view.showMessage(`已加载 ${state.pagination.total} 条审计事件。`);
       }
@@ -152,6 +170,32 @@
     if (event.target.closest('[data-sa-refresh]')) {
       pageNumber = 1;
       await load();
+      return;
+    }
+    const range = event.target.closest('[data-sa-range-value]');
+    if (range) {
+      state.range = range.dataset.saRangeValue;
+      adapter.get('sa-range').value = state.range;
+      pageNumber = 1;
+      await load();
+      return;
+    }
+    const dimension = event.target.closest('[data-sa-analysis-dimension]');
+    if (dimension) {
+      state.analysisDimension = dimension.dataset.saAnalysisDimension;
+      state.analysisRowsLimit = 8;
+      await load();
+      return;
+    }
+    const sort = event.target.closest('[data-sa-analysis-sort]');
+    if (sort) {
+      state.analysisSort = sort.dataset.saAnalysisSort;
+      await load();
+      return;
+    }
+    if (event.target.closest('[data-sa-analysis-more]')) {
+      state.analysisRowsLimit += 20;
+      view.renderAnalysis();
       return;
     }
     if (event.target.closest('[data-sa-clear]')) {
@@ -228,6 +272,7 @@
         await load();
       });
       adapter.get('sa-range').value = state.range;
+      syncRangeButtons();
       ['sa-user-id', 'sa-node-id', 'sa-action'].forEach((id) => {
         adapter.get(id)?.addEventListener('change', async () => {
           pageNumber = 1;

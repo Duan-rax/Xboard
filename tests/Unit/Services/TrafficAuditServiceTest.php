@@ -117,6 +117,45 @@ class TrafficAuditServiceTest extends TestCase
         $this->assertSame(28, (int) $traffic['nodes'][0]->node_id);
     }
 
+    public function test_analysis_groups_services_and_exact_destinations(): void
+    {
+        foreach ([
+            ['event-ai', 'connection-ai', 'tcp:api.openai.com:443', 100, 200],
+            ['event-google', 'connection-google', 'tcp:www.google.com:443', 50, 150],
+            ['event-other', 'connection-other', 'tcp:unknown.example:8443', 25, 25],
+        ] as [$eventId, $connectionId, $destination, $upload, $download]) {
+            TrafficAuditService::insertEvent([
+                'event_id' => $eventId,
+                'connection_id' => $connectionId,
+                'node_id' => '22',
+                'occurred_at' => now()->toIso8601String(),
+                'action' => 'observe',
+                'destination' => $destination,
+                'upload_bytes' => $upload,
+                'download_bytes' => $download,
+            ]);
+        }
+
+        $services = app(TrafficAuditService::class)->analysis([
+            'range' => '24h',
+            'dimension' => 'service',
+            'sort' => 'bytes',
+        ]);
+        $this->assertSame(550, $services['cards']['total_bytes']);
+        $this->assertSame('OpenAI', $services['rows'][0]['name']);
+        $this->assertSame(300, $services['rows'][0]['total_bytes']);
+        $this->assertSame('Google', $services['rows'][1]['name']);
+        $this->assertSame('其他', collect($services['rows'])->firstWhere('key', 'other')['name']);
+
+        $destinations = app(TrafficAuditService::class)->analysis([
+            'range' => '24h',
+            'dimension' => 'destination',
+            'sort' => 'connections',
+        ]);
+        $this->assertSame('api.openai.com', $destinations['rows'][0]['name']);
+        $this->assertSame(1, $destinations['rows'][0]['connections']);
+    }
+
     public function test_health_reports_node_coverage_and_identity_rates(): void
     {
         if (!Schema::hasTable('v2_server')) {

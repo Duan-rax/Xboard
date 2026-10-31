@@ -25,6 +25,10 @@
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M3 12h4l3-9 4 18 3-9h4"></path>
       </svg>`,
+    analysis: `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>
+      </svg>`,
     rules: `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M4 5h16M7 12h10M10 19h4"></path><circle cx="8" cy="5" r="2"></circle><circle cx="15" cy="12" r="2"></circle>
@@ -41,7 +45,8 @@
   };
   const MENU_SECTIONS = [
     ['overview', '审计概览'],
-    ['traffic', '流量明细'],
+    ['analysis', '流量分析'],
+    ['traffic', '流量审计记录'],
     ['rules', '规则命中'],
     ['users', '用户审计'],
     ['settings', '审计设置'],
